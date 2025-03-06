@@ -10,3 +10,7 @@ This will be a reusable library that can be reused to implement an Android view 
 * This crate intends to stick as close as possible to the Android framework. This will be especially important for text input support.
 
 So far, glue code has been written for implementing several Android framework methods (on both `View` and `SurfaceHolder.Callback`) in Rust, but it's not fully wired up yet, and the plumbing for `InputConnection` still needs to be done.
+
+## Open questions
+
+* Do we need to be able to handle the view being reattached to a window after it has been detached? If not, then `onDetachedFromWindow` is the logical place to sever the connection between Java and native.
