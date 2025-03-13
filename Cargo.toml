@@ -9,3 +9,9 @@ edition = "2024"
 [dependencies]
 jni = "0.21.1"
 ndk = "0.9.0"
+
+[profile.dev]
+panic = "abort"
+
+[profile.release]
+panic = "abort"

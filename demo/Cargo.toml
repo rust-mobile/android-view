@@ -9,3 +9,5 @@ crate-type = ["cdylib"]
 
 [dependencies]
 android-view = { path = ".." }
+android_logger = "0.15.0"
+log = "0.4.26"
