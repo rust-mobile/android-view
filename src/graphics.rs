@@ -1,4 +1,4 @@
-use jni::{objects::JObject, sys::jint, JNIEnv};
+use jni::{JNIEnv, objects::JObject, sys::jint};
 
 #[repr(transparent)]
 pub struct Rect<'local>(pub JObject<'local>);

@@ -1,4 +1,4 @@
-use jni::{objects::JObject, JNIEnv};
+use jni::{JNIEnv, objects::JObject};
 use ndk::native_window::NativeWindow;
 
 #[repr(transparent)]

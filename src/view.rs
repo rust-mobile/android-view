@@ -1,15 +1,15 @@
 use jni::{
+    JNIEnv, NativeMethod,
     descriptors::Desc,
     objects::{JClass, JIntArray, JObject},
-    sys::{jboolean, jint, jlong, JNI_FALSE, JNI_TRUE},
-    JNIEnv, NativeMethod,
+    sys::{JNI_FALSE, JNI_TRUE, jboolean, jint, jlong},
 };
 use std::{
     collections::BTreeMap,
     ffi::c_void,
     sync::{
-        atomic::{AtomicI64, Ordering},
         Mutex, Once,
+        atomic::{AtomicI64, Ordering},
     },
 };
 
@@ -238,11 +238,7 @@ extern "system" fn on_size_changed<'local>(
 }
 
 fn to_jboolean(flag: bool) -> jboolean {
-    if flag {
-        JNI_TRUE
-    } else {
-        JNI_FALSE
-    }
+    if flag { JNI_TRUE } else { JNI_FALSE }
 }
 
 extern "system" fn on_key_down<'local>(
@@ -410,17 +406,7 @@ extern "system" fn surface_destroyed<'local>(
     })
 }
 
-pub fn new_view<'local, C, F>(
-    mut env: JNIEnv<'local>,
-    view: View<'local>,
-    context: Context<'local>,
-    callback_factory: F,
-) -> jlong
-where
-    C: ViewCallback + 'static,
-    F: FnOnce(&mut JNIEnv<'local>, &View<'local>, &Context<'local>) -> C,
-{
-    let callback = callback_factory(&mut env, &view, &context);
+pub fn new_view_handle(callback: impl 'static + ViewCallback) -> jlong {
     let handle = NEXT_HANDLE.fetch_add(1, Ordering::Relaxed);
     let mut map = HANDLE_MAP.lock().unwrap();
     map.insert(handle, Box::new(callback));

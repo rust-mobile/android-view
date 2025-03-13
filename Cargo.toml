@@ -1,7 +1,10 @@
+[workspace]
+members = [".", "demo"]
+
 [package]
 name = "android-view"
 version = "0.1.0"
-edition = "2021"
+edition = "2024"
 
 [dependencies]
 jni = "0.21.1"

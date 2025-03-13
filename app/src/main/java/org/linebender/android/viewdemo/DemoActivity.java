@@ -1,4 +1,4 @@
-package org.linebender.android;
+package org.linebender.android.viewdemo;
 
 import android.app.Activity;
 import android.os.Bundle;

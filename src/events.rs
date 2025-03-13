@@ -1,7 +1,7 @@
 use jni::{
+    JNIEnv,
     objects::JObject,
     sys::{jfloat, jint, jlong},
-    JNIEnv,
 };
 
 #[repr(transparent)]

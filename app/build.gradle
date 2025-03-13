@@ -7,7 +7,7 @@ android {
     compileSdk 31
 
     defaultConfig {
-        applicationId "org.linebender.android"
+        applicationId "org.linebender.android.viewdemo"
         minSdk 28
         targetSdk 31
         versionCode 1
@@ -33,7 +33,7 @@ android {
         sourceCompatibility JavaVersion.VERSION_1_8
         targetCompatibility JavaVersion.VERSION_1_8
     }
-    namespace "org.linebender.android"
+    namespace "org.linebender.android.viewdemo"
 }
 
 dependencies {

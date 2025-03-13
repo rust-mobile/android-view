@@ -1,0 +1,11 @@
+[package]
+name = "android-view-demo"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+name = "main"
+crate-type = ["cdylib"]
+
+[dependencies]
+android-view = { path = ".." }

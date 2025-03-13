@@ -1,6 +1,8 @@
-package org.linebender.android;
+package org.linebender.android.viewdemo;
 
 import android.content.Context;
+
+import org.linebender.android.RustView;
 
 public final class DemoView extends RustView {
     @Override
