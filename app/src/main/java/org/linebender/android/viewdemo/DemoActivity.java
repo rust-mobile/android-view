@@ -6,6 +6,10 @@ import android.view.View;
 import android.widget.FrameLayout;
 
 public final class DemoActivity extends Activity {
+    static {
+         System.loadLibrary("main");
+    }
+
     @Override
     public void onCreate(Bundle state) {
         super.onCreate(state);
