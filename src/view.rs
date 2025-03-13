@@ -1,13 +1,15 @@
 use jni::{
-    objects::{JIntArray, JObject},
+    descriptors::Desc,
+    objects::{JClass, JIntArray, JObject},
     sys::{jboolean, jint, jlong, JNI_FALSE, JNI_TRUE},
-    JNIEnv,
+    JNIEnv, NativeMethod,
 };
 use std::{
     collections::BTreeMap,
+    ffi::c_void,
     sync::{
         atomic::{AtomicI64, Ordering},
-        Mutex,
+        Mutex, Once,
     },
 };
 
@@ -28,6 +30,7 @@ pub trait ViewCallback: Send {
         None
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn on_layout<'local>(
         &mut self,
         env: &mut JNIEnv<'local>,
@@ -324,7 +327,7 @@ extern "system" fn on_focus_changed<'local>(
             &view,
             gain_focus == JNI_TRUE,
             direction,
-            (!previously_focused_rect.0.as_raw().is_null()).then(|| &previously_focused_rect),
+            (!previously_focused_rect.0.as_raw().is_null()).then_some(&previously_focused_rect),
         );
     })
 }
@@ -422,4 +425,114 @@ where
     let mut map = HANDLE_MAP.lock().unwrap();
     map.insert(handle, Box::new(callback));
     handle
+}
+
+pub fn register_view_class<'local, 'other_local>(
+    env: &mut JNIEnv<'local>,
+    class: impl Desc<'local, JClass<'other_local>>,
+    new_native: for<'a> extern "system" fn(JNIEnv<'a>, View<'a>, Context<'a>) -> jlong,
+) {
+    static REGISTER_BASE_NATIVES: Once = Once::new();
+    REGISTER_BASE_NATIVES.call_once(|| {
+        env.register_native_methods(
+            "org/linebender/android/RustView",
+            &[
+                NativeMethod {
+                    name: "onMeasureNative".into(),
+                    sig: "(JII)[I".into(),
+                    fn_ptr: on_measure as *mut c_void,
+                },
+                NativeMethod {
+                    name: "onLayoutNative".into(),
+                    sig: "(JZIIII)V".into(),
+                    fn_ptr: on_layout as *mut c_void,
+                },
+                NativeMethod {
+                    name: "onSizeChangedNative".into(),
+                    sig: "(JIIII)V".into(),
+                    fn_ptr: on_size_changed as *mut c_void,
+                },
+                NativeMethod {
+                    name: "onKeyDownNative".into(),
+                    sig: "(JILandroid/view/KeyEvent;)Z".into(),
+                    fn_ptr: on_key_down as *mut c_void,
+                },
+                NativeMethod {
+                    name: "onKeyUpNative".into(),
+                    sig: "(JILandroid/view/KeyEvent;)Z".into(),
+                    fn_ptr: on_key_up as *mut c_void,
+                },
+                NativeMethod {
+                    name: "onTrackballEventNative".into(),
+                    sig: "(JLandroid/view/MotionEvent;)Z".into(),
+                    fn_ptr: on_trackball_event as *mut c_void,
+                },
+                NativeMethod {
+                    name: "onTouchEventNative".into(),
+                    sig: "(JLandroid/view/MotionEvent;)Z".into(),
+                    fn_ptr: on_touch_event as *mut c_void,
+                },
+                NativeMethod {
+                    name: "onGenericMotionEventNative".into(),
+                    sig: "(JLandroid/view/MotionEvent;)Z".into(),
+                    fn_ptr: on_generic_motion_event as *mut c_void,
+                },
+                NativeMethod {
+                    name: "onHoverEventNative".into(),
+                    sig: "(JLandroid/view/MotionEvent;)Z".into(),
+                    fn_ptr: on_hover_event as *mut c_void,
+                },
+                NativeMethod {
+                    name: "onFocusChangedNative".into(),
+                    sig: "(JZILandroid/graphics/Rect;)V".into(),
+                    fn_ptr: on_focus_changed as *mut c_void,
+                },
+                NativeMethod {
+                    name: "onWindowFocusChangedNative".into(),
+                    sig: "(JZ)V".into(),
+                    fn_ptr: on_window_focus_changed as *mut c_void,
+                },
+                NativeMethod {
+                    name: "onAttachedToWindowNative".into(),
+                    sig: "(J)V".into(),
+                    fn_ptr: on_attached_to_window as *mut c_void,
+                },
+                NativeMethod {
+                    name: "onDetachedFromWindowNative".into(),
+                    sig: "(J)V".into(),
+                    fn_ptr: on_detached_from_window as *mut c_void,
+                },
+                NativeMethod {
+                    name: "onWindowVisibilityChangedNative".into(),
+                    sig: "(JI)V".into(),
+                    fn_ptr: on_window_visibility_changed as *mut c_void,
+                },
+                NativeMethod {
+                    name: "surfaceCreatedNative".into(),
+                    sig: "(JLandroid/view/SurfaceHolder;)V".into(),
+                    fn_ptr: surface_created as *mut c_void,
+                },
+                NativeMethod {
+                    name: "surfaceChangedNative".into(),
+                    sig: "(JLandroid/view/SurfaceHolder;III)V".into(),
+                    fn_ptr: surface_changed as *mut c_void,
+                },
+                NativeMethod {
+                    name: "surfaceDestroyedNative".into(),
+                    sig: "(JLandroid/view/SurfaceHolder;)V".into(),
+                    fn_ptr: surface_destroyed as *mut c_void,
+                },
+            ],
+        )
+        .unwrap();
+    });
+    env.register_native_methods(
+        class,
+        &[NativeMethod {
+            name: "newNative".into(),
+            sig: "(Landroid/content/Context;)J".into(),
+            fn_ptr: new_native as *mut c_void,
+        }],
+    )
+    .unwrap();
 }
