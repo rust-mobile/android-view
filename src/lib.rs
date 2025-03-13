@@ -671,3 +671,23 @@ extern "system" fn surface_destroyed<'local>(
         callback.surface_destroyed(&mut env, &view, &holder);
     })
 }
+
+#[repr(transparent)]
+pub struct Context<'local>(pub JObject<'local>);
+
+pub fn new_view<'local, C, F>(
+    mut env: JNIEnv<'local>,
+    view: View<'local>,
+    context: Context<'local>,
+    callback_factory: F,
+) -> jlong
+where
+    C: ViewCallback + 'static,
+    F: FnOnce(&mut JNIEnv<'local>, &View<'local>, &Context<'local>) -> C,
+{
+    let callback = callback_factory(&mut env, &view, &context);
+    let handle = NEXT_VIEW_CALLBACK_HANDLE.fetch_add(1, Ordering::Relaxed);
+    let mut map = VIEW_CALLBACK_HANDLE_MAP.lock().unwrap();
+    map.insert(handle, Box::new(callback));
+    handle
+}

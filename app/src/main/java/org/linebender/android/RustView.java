@@ -1,15 +1,21 @@
 package org.linebender.android;
 
+import android.content.Context;
 import android.graphics.Rect;
 import android.view.KeyEvent;
 import android.view.MotionEvent;
 import android.view.SurfaceHolder;
 import android.view.SurfaceView;
 
-public class RustView extends SurfaceView implements SurfaceHolder.Callback {
+public abstract class RustView extends SurfaceView implements SurfaceHolder.Callback {
     private final long mHandle;
 
-    // TODO: constructor
+    protected abstract long newNative(Context context);
+
+    public RustView(Context context) {
+        super(context);
+        mHandle = newNative(context);
+    }
 
     private native int[] onMeasureNative(long handle, int widthSpec, int heightSpec);
 
