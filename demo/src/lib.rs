@@ -10,9 +10,9 @@ use android_view::{
 use log::LevelFilter;
 use std::ffi::c_void;
 
-struct DemoViewCallback;
+struct DemoViewPeer;
 
-impl ViewCallback for DemoViewCallback {
+impl ViewPeer for DemoViewPeer {
     fn on_hover_event<'local>(
         &mut self,
         env: &mut JNIEnv<'local>,
@@ -26,13 +26,13 @@ impl ViewCallback for DemoViewCallback {
     // TODO
 }
 
-extern "system" fn view_new_native<'local>(
+extern "system" fn new_view_peer<'local>(
     _env: JNIEnv<'local>,
     _view: View<'local>,
     _context: Context<'local>,
 ) -> jlong {
     log::trace!("new demo view");
-    new_view_handle(DemoViewCallback)
+    register_view_peer(DemoViewPeer)
 }
 
 #[unsafe(no_mangle)]
@@ -48,7 +48,7 @@ pub unsafe extern "system" fn JNI_OnLoad(vm: *mut RawJavaVM, _: *mut c_void) -> 
     register_view_class(
         &mut env,
         "org/linebender/android/viewdemo/DemoView",
-        view_new_native,
+        new_view_peer,
     );
     JNI_VERSION_1_6
 }

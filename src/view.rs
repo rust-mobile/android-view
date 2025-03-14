@@ -19,7 +19,7 @@ use crate::{context::*, events::*, graphics::*, surface::*};
 pub struct View<'local>(pub JObject<'local>);
 
 #[allow(unused_variables)]
-pub trait ViewCallback: Send {
+pub trait ViewPeer: Send {
     fn on_measure<'local>(
         &mut self,
         env: &mut JNIEnv<'local>,
@@ -168,28 +168,27 @@ pub trait ViewCallback: Send {
     }
 }
 
-static NEXT_HANDLE: AtomicI64 = AtomicI64::new(0);
-static HANDLE_MAP: Mutex<BTreeMap<jlong, Box<dyn ViewCallback>>> = Mutex::new(BTreeMap::new());
+static NEXT_PEER_ID: AtomicI64 = AtomicI64::new(0);
+static PEER_MAP: Mutex<BTreeMap<jlong, Box<dyn ViewPeer>>> = Mutex::new(BTreeMap::new());
 
-fn with_callback<F, T>(handle: jlong, f: F) -> T
+fn with_peer<F, T>(id: jlong, f: F) -> T
 where
-    F: FnOnce(&mut dyn ViewCallback) -> T,
+    F: FnOnce(&mut dyn ViewPeer) -> T,
 {
-    let mut map = HANDLE_MAP.lock().unwrap();
-    let callback = map.get_mut(&handle).unwrap();
-    f(&mut **callback)
+    let mut map = PEER_MAP.lock().unwrap();
+    let peer = map.get_mut(&id).unwrap();
+    f(&mut **peer)
 }
 
 extern "system" fn on_measure<'local>(
     mut env: JNIEnv<'local>,
     view: View<'local>,
-    handle: jlong,
+    peer: jlong,
     width_spec: jint,
     height_spec: jint,
 ) -> JIntArray<'local> {
-    with_callback(handle, |callback| {
-        if let Some((width, height)) = callback.on_measure(&mut env, &view, width_spec, height_spec)
-        {
+    with_peer(peer, |peer| {
+        if let Some((width, height)) = peer.on_measure(&mut env, &view, width_spec, height_spec) {
             let result = env.new_int_array(2).unwrap();
             env.set_int_array_region(&result, 0, &[width, height])
                 .unwrap();
@@ -203,15 +202,15 @@ extern "system" fn on_measure<'local>(
 extern "system" fn on_layout<'local>(
     mut env: JNIEnv<'local>,
     view: View<'local>,
-    handle: jlong,
+    peer: jlong,
     changed: jboolean,
     left: jint,
     top: jint,
     right: jint,
     bottom: jint,
 ) {
-    with_callback(handle, |callback| {
-        callback.on_layout(
+    with_peer(peer, |peer| {
+        peer.on_layout(
             &mut env,
             &view,
             changed == JNI_TRUE,
@@ -226,14 +225,14 @@ extern "system" fn on_layout<'local>(
 extern "system" fn on_size_changed<'local>(
     mut env: JNIEnv<'local>,
     view: View<'local>,
-    handle: jlong,
+    peer: jlong,
     w: jint,
     h: jint,
     oldw: jint,
     oldh: jint,
 ) {
-    with_callback(handle, |callback| {
-        callback.on_size_changed(&mut env, &view, w, h, oldw, oldh);
+    with_peer(peer, |peer| {
+        peer.on_size_changed(&mut env, &view, w, h, oldw, oldh);
     })
 }
 
@@ -244,81 +243,81 @@ fn to_jboolean(flag: bool) -> jboolean {
 extern "system" fn on_key_down<'local>(
     mut env: JNIEnv<'local>,
     view: View<'local>,
-    handle: jlong,
+    peer: jlong,
     key_code: jint,
     event: KeyEvent<'local>,
 ) -> jboolean {
-    with_callback(handle, |callback| {
-        to_jboolean(callback.on_key_down(&mut env, &view, key_code, &event))
+    with_peer(peer, |peer| {
+        to_jboolean(peer.on_key_down(&mut env, &view, key_code, &event))
     })
 }
 
 extern "system" fn on_key_up<'local>(
     mut env: JNIEnv<'local>,
     view: View<'local>,
-    handle: jlong,
+    peer: jlong,
     key_code: jint,
     event: KeyEvent<'local>,
 ) -> jboolean {
-    with_callback(handle, |callback| {
-        to_jboolean(callback.on_key_up(&mut env, &view, key_code, &event))
+    with_peer(peer, |peer| {
+        to_jboolean(peer.on_key_up(&mut env, &view, key_code, &event))
     })
 }
 
 extern "system" fn on_trackball_event<'local>(
     mut env: JNIEnv<'local>,
     view: View<'local>,
-    handle: jlong,
+    peer: jlong,
     event: MotionEvent<'local>,
 ) -> jboolean {
-    with_callback(handle, |callback| {
-        to_jboolean(callback.on_trackball_event(&mut env, &view, &event))
+    with_peer(peer, |peer| {
+        to_jboolean(peer.on_trackball_event(&mut env, &view, &event))
     })
 }
 
 extern "system" fn on_touch_event<'local>(
     mut env: JNIEnv<'local>,
     view: View<'local>,
-    handle: jlong,
+    peer: jlong,
     event: MotionEvent<'local>,
 ) -> jboolean {
-    with_callback(handle, |callback| {
-        to_jboolean(callback.on_touch_event(&mut env, &view, &event))
+    with_peer(peer, |peer| {
+        to_jboolean(peer.on_touch_event(&mut env, &view, &event))
     })
 }
 
 extern "system" fn on_generic_motion_event<'local>(
     mut env: JNIEnv<'local>,
     view: View<'local>,
-    handle: jlong,
+    peer: jlong,
     event: MotionEvent<'local>,
 ) -> jboolean {
-    with_callback(handle, |callback| {
-        to_jboolean(callback.on_generic_motion_event(&mut env, &view, &event))
+    with_peer(peer, |peer| {
+        to_jboolean(peer.on_generic_motion_event(&mut env, &view, &event))
     })
 }
 
 extern "system" fn on_hover_event<'local>(
     mut env: JNIEnv<'local>,
     view: View<'local>,
-    handle: jlong,
+    peer: jlong,
     event: MotionEvent<'local>,
 ) -> jboolean {
-    with_callback(handle, |callback| {
-        to_jboolean(callback.on_hover_event(&mut env, &view, &event))
+    with_peer(peer, |peer| {
+        to_jboolean(peer.on_hover_event(&mut env, &view, &event))
     })
 }
 
 extern "system" fn on_focus_changed<'local>(
     mut env: JNIEnv<'local>,
     view: View<'local>,
-    handle: jlong,
+    peer: jlong,
     gain_focus: jboolean,
     direction: jint,
     previously_focused_rect: Rect<'local>,
 ) {
-    with_callback(handle, |callback| {
-        callback.on_focus_changed(
+    with_peer(peer, |peer| {
+        peer.on_focus_changed(
             &mut env,
             &view,
             gain_focus == JNI_TRUE,
@@ -331,92 +330,92 @@ extern "system" fn on_focus_changed<'local>(
 extern "system" fn on_window_focus_changed<'local>(
     mut env: JNIEnv<'local>,
     view: View<'local>,
-    handle: jlong,
+    peer: jlong,
     has_window_focus: jboolean,
 ) {
-    with_callback(handle, |callback| {
-        callback.on_window_focus_changed(&mut env, &view, has_window_focus == JNI_TRUE);
+    with_peer(peer, |peer| {
+        peer.on_window_focus_changed(&mut env, &view, has_window_focus == JNI_TRUE);
     })
 }
 
 extern "system" fn on_attached_to_window<'local>(
     mut env: JNIEnv<'local>,
     view: View<'local>,
-    handle: jlong,
+    peer: jlong,
 ) {
-    with_callback(handle, |callback| {
-        callback.on_attached_to_window(&mut env, &view);
+    with_peer(peer, |peer| {
+        peer.on_attached_to_window(&mut env, &view);
     })
 }
 
 extern "system" fn on_detached_from_window<'local>(
     mut env: JNIEnv<'local>,
     view: View<'local>,
-    handle: jlong,
+    peer: jlong,
 ) {
-    let mut map = HANDLE_MAP.lock().unwrap();
-    let mut callback = map.remove(&handle).unwrap();
-    callback.on_detached_from_window(&mut env, &view);
+    let mut map = PEER_MAP.lock().unwrap();
+    let mut peer = map.remove(&peer).unwrap();
+    peer.on_detached_from_window(&mut env, &view);
 }
 
 extern "system" fn on_window_visibility_changed<'local>(
     mut env: JNIEnv<'local>,
     view: View<'local>,
-    handle: jlong,
+    peer: jlong,
     visibility: jint,
 ) {
-    with_callback(handle, |callback| {
-        callback.on_window_visibility_changed(&mut env, &view, visibility);
+    with_peer(peer, |peer| {
+        peer.on_window_visibility_changed(&mut env, &view, visibility);
     })
 }
 
 extern "system" fn surface_created<'local>(
     mut env: JNIEnv<'local>,
     view: View<'local>,
-    handle: jlong,
+    peer: jlong,
     holder: SurfaceHolder<'local>,
 ) {
-    with_callback(handle, |callback| {
-        callback.surface_created(&mut env, &view, &holder);
+    with_peer(peer, |peer| {
+        peer.surface_created(&mut env, &view, &holder);
     })
 }
 
 extern "system" fn surface_changed<'local>(
     mut env: JNIEnv<'local>,
     view: View<'local>,
-    handle: jlong,
+    peer: jlong,
     holder: SurfaceHolder<'local>,
     format: jint,
     width: jint,
     height: jint,
 ) {
-    with_callback(handle, |callback| {
-        callback.surface_changed(&mut env, &view, &holder, format, width, height);
+    with_peer(peer, |peer| {
+        peer.surface_changed(&mut env, &view, &holder, format, width, height);
     })
 }
 
 extern "system" fn surface_destroyed<'local>(
     mut env: JNIEnv<'local>,
     view: View<'local>,
-    handle: jlong,
+    peer: jlong,
     holder: SurfaceHolder<'local>,
 ) {
-    with_callback(handle, |callback| {
-        callback.surface_destroyed(&mut env, &view, &holder);
+    with_peer(peer, |peer| {
+        peer.surface_destroyed(&mut env, &view, &holder);
     })
 }
 
-pub fn new_view_handle(callback: impl 'static + ViewCallback) -> jlong {
-    let handle = NEXT_HANDLE.fetch_add(1, Ordering::Relaxed);
-    let mut map = HANDLE_MAP.lock().unwrap();
-    map.insert(handle, Box::new(callback));
-    handle
+pub fn register_view_peer(peer: impl 'static + ViewPeer) -> jlong {
+    let id = NEXT_PEER_ID.fetch_add(1, Ordering::Relaxed);
+    let mut map = PEER_MAP.lock().unwrap();
+    map.insert(id, Box::new(peer));
+    id
 }
 
 pub fn register_view_class<'local, 'other_local>(
     env: &mut JNIEnv<'local>,
     class: impl Desc<'local, JClass<'other_local>>,
-    new_native: for<'a> extern "system" fn(JNIEnv<'a>, View<'a>, Context<'a>) -> jlong,
+    new_peer: for<'a> extern "system" fn(JNIEnv<'a>, View<'a>, Context<'a>) -> jlong,
 ) {
     static REGISTER_BASE_NATIVES: Once = Once::new();
     REGISTER_BASE_NATIVES.call_once(|| {
@@ -515,9 +514,9 @@ pub fn register_view_class<'local, 'other_local>(
     env.register_native_methods(
         class,
         &[NativeMethod {
-            name: "newNative".into(),
+            name: "newViewPeer".into(),
             sig: "(Landroid/content/Context;)J".into(),
-            fn_ptr: new_native as *mut c_void,
+            fn_ptr: new_peer as *mut c_void,
         }],
     )
     .unwrap();
