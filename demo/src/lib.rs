@@ -1,29 +1,145 @@
+// Derived from vello_editor
+// Copyright 2024 the Parley Authors
+// SPDX-License-Identifier: Apache-2.0 OR MIT
+
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use accesskit::{Node, Role, Tree, TreeUpdate};
 use android_view::{
     jni::{
         JNIEnv, JavaVM,
         sys::{JNI_VERSION_1_6, JavaVM as RawJavaVM, jint, jlong},
     },
+    ndk::native_window::NativeWindow,
     *,
 };
+use anyhow::Result;
 use log::LevelFilter;
 use std::ffi::c_void;
+use std::num::NonZeroUsize;
+use std::sync::Arc;
+use vello::kurbo;
+use vello::peniko::Color;
+use vello::util::{RenderContext, RenderSurface};
+use vello::wgpu::{
+    self,
+    rwh::{DisplayHandle, HandleError, HasDisplayHandle, HasWindowHandle, WindowHandle},
+};
+use vello::{AaConfig, Renderer, RendererOptions, Scene};
 
-struct DemoViewPeer;
+mod access_ids;
+use access_ids::{TEXT_INPUT_ID, WINDOW_ID};
+
+mod text;
+
+// From VelloCompose
+struct AndroidWindowHandle {
+    window: NativeWindow,
+}
+
+impl HasDisplayHandle for AndroidWindowHandle {
+    fn display_handle(&self) -> Result<DisplayHandle<'_>, HandleError> {
+        Ok(DisplayHandle::android())
+    }
+}
+
+impl HasWindowHandle for AndroidWindowHandle {
+    fn window_handle(&self) -> Result<WindowHandle<'_>, HandleError> {
+        self.window.window_handle()
+    }
+}
+
+/// Helper function that creates a vello `Renderer` for a given `RenderContext` and `RenderSurface`
+fn create_vello_renderer(render_cx: &RenderContext, surface: &RenderSurface<'_>) -> Renderer {
+    Renderer::new(
+        &render_cx.devices[surface.dev_id].device,
+        RendererOptions {
+            surface_format: Some(surface.format),
+            use_cpu: false,
+            antialiasing_support: vello::AaSupport::all(),
+            num_init_threads: NonZeroUsize::new(1),
+        },
+    )
+    .expect("Couldn't create renderer")
+}
+
+struct DemoViewPeer {
+    /// The vello `RenderContext` which is a global context that lasts for the
+    /// lifetime of the application.
+    context: RenderContext,
+
+    /// An array of renderers, one per wgpu device.
+    renderers: Vec<Option<Renderer>>,
+
+    /// State for our example where we store the winit Window and the wgpu Surface.
+    render_surface: Option<RenderSurface<'static>>,
+
+    /// A `vello::Scene` where the editor layout will be drawn.
+    scene: Scene,
+
+    /// Our `Editor`, which owns a `parley::PlainEditor`.
+    editor: text::Editor,
+
+    /// The last generation of the editor layout that we drew.
+    last_drawn_generation: text::Generation,
+
+    /// The IME cursor area we last sent to the platform.
+    last_sent_ime_cursor_area: kurbo::Rect,
+    // TODO: accessibility
+}
 
 impl ViewPeer for DemoViewPeer {
-    fn on_hover_event<'local>(
+    // TODO
+
+    fn surface_changed<'local>(
         &mut self,
         env: &mut JNIEnv<'local>,
-        _view: &View,
-        event: &MotionEvent<'local>,
-    ) -> bool {
-        log::trace!("hover {} {}", event.x(env), event.y(env));
-        false
+        _view: &View<'local>,
+        holder: &SurfaceHolder<'local>,
+        _format: jint,
+        width: jint,
+        height: jint,
+    ) {
+        let window = holder.surface(env).to_native_window(env);
+        let surface = self
+            .context
+            .instance
+            .create_surface(wgpu::SurfaceTarget::from(AndroidWindowHandle { window }))
+            .expect("Error creating surface");
+        let dev_id =
+            pollster::block_on(self.context.device(Some(&surface))).expect("No compatible device");
+        let device_handle = &self.context.devices[dev_id];
+        let capabilities = surface.get_capabilities(device_handle.adapter());
+        let present_mode = if capabilities
+            .present_modes
+            .contains(&wgpu::PresentMode::Mailbox)
+        {
+            wgpu::PresentMode::Mailbox
+        } else {
+            wgpu::PresentMode::AutoVsync
+        };
+
+        let surface_future =
+            self.context
+                .create_render_surface(surface, width as _, height as _, present_mode);
+        let surface = pollster::block_on(surface_future).expect("Error creating surface");
+
+        // Create a vello Renderer for the surface (using its device id)
+        self.renderers
+            .resize_with(self.context.devices.len(), || None);
+        self.renderers[surface.dev_id]
+            .get_or_insert_with(|| create_vello_renderer(&self.context, &surface));
+        self.render_surface = Some(surface);
     }
 
-    // TODO
+    fn surface_destroyed<'local>(
+        &mut self,
+        _env: &mut JNIEnv<'local>,
+        _view: &View<'local>,
+        _holder: &SurfaceHolder<'local>,
+    ) {
+        self.render_surface = None;
+    }
 }
 
 extern "system" fn new_view_peer<'local>(
@@ -31,8 +147,17 @@ extern "system" fn new_view_peer<'local>(
     _view: View<'local>,
     _context: Context<'local>,
 ) -> jlong {
-    log::trace!("new demo view");
-    register_view_peer(DemoViewPeer)
+    let peer = DemoViewPeer {
+        context: RenderContext::new(),
+        renderers: vec![],
+        render_surface: None,
+        scene: Scene::new(),
+        editor: text::Editor::new(text::LOREM),
+        last_drawn_generation: Default::default(),
+        last_sent_ime_cursor_area: kurbo::Rect::new(f64::NAN, f64::NAN, f64::NAN, f64::NAN),
+        // TODO: accessibility
+    };
+    register_view_peer(peer)
 }
 
 #[unsafe(no_mangle)]
