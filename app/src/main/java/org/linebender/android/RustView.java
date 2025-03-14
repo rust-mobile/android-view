@@ -15,6 +15,7 @@ public abstract class RustView extends SurfaceView implements SurfaceHolder.Call
     public RustView(Context context) {
         super(context);
         mHandle = newNative(context);
+        getHolder().addCallback(this);
     }
 
     private native int[] onMeasureNative(long handle, int widthSpec, int heightSpec);
