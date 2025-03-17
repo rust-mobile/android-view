@@ -205,6 +205,15 @@ impl ViewPeer for DemoViewPeer {
     ) {
         self.render_surface = None;
     }
+
+    fn do_frame<'local>(
+        &mut self,
+        _env: &mut JNIEnv<'local>,
+        _view: &View<'local>,
+        _frame_time_nanos: jlong,
+    ) {
+        self.render()
+    }
 }
 
 extern "system" fn new_view_peer<'local>(

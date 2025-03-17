@@ -2,12 +2,13 @@ package org.linebender.android;
 
 import android.content.Context;
 import android.graphics.Rect;
+import android.view.Choreographer;
 import android.view.KeyEvent;
 import android.view.MotionEvent;
 import android.view.SurfaceHolder;
 import android.view.SurfaceView;
 
-public abstract class RustView extends SurfaceView implements SurfaceHolder.Callback {
+public abstract class RustView extends SurfaceView implements SurfaceHolder.Callback, Choreographer.FrameCallback {
     private final long mViewPeer;
 
     protected abstract long newViewPeer(Context context);
@@ -150,5 +151,18 @@ public abstract class RustView extends SurfaceView implements SurfaceHolder.Call
     @Override
     public void surfaceDestroyed(SurfaceHolder holder) {
         surfaceDestroyedNative(mViewPeer, holder);
+    }
+
+    void postFrameCallback() {
+        Choreographer c = Choreographer.getInstance();
+        c.removeFrameCallback(this);
+        c.postFrameCallback(this);
+    }
+
+    private native void doFrameNative(long peer, long frameTimeNanos);
+
+    @Override
+    public void doFrame(long frameTimeNanos) {
+        doFrameNative(mViewPeer, frameTimeNanos);
     }
 }

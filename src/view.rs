@@ -18,6 +18,15 @@ use crate::{context::*, events::*, graphics::*, surface::*};
 #[repr(transparent)]
 pub struct View<'local>(pub JObject<'local>);
 
+impl<'local> View<'local> {
+    pub fn post_frame_callback(&self, env: &mut JNIEnv<'local>) {
+        env.call_method(&self.0, "postFrameCallback", "()V", &[])
+            .unwrap()
+            .v()
+            .unwrap()
+    }
+}
+
 #[allow(unused_variables)]
 pub trait ViewPeer: Send {
     fn on_measure<'local>(
@@ -164,6 +173,14 @@ pub trait ViewPeer: Send {
         env: &mut JNIEnv<'local>,
         view: &View<'local>,
         holder: &SurfaceHolder<'local>,
+    ) {
+    }
+
+    fn do_frame<'local>(
+        &mut self,
+        env: &mut JNIEnv<'local>,
+        view: &View<'local>,
+        frame_time_nanos: jlong,
     ) {
     }
 }
@@ -405,6 +422,17 @@ extern "system" fn surface_destroyed<'local>(
     })
 }
 
+extern "system" fn do_frame<'local>(
+    mut env: JNIEnv<'local>,
+    view: View<'local>,
+    peer: jlong,
+    frame_time_nanos: jlong,
+) {
+    with_peer(peer, |peer| {
+        peer.do_frame(&mut env, &view, frame_time_nanos);
+    })
+}
+
 pub fn register_view_peer(peer: impl 'static + ViewPeer) -> jlong {
     let id = NEXT_PEER_ID.fetch_add(1, Ordering::Relaxed);
     let mut map = PEER_MAP.lock().unwrap();
@@ -506,6 +534,11 @@ pub fn register_view_class<'local, 'other_local>(
                     name: "surfaceDestroyedNative".into(),
                     sig: "(JLandroid/view/SurfaceHolder;)V".into(),
                     fn_ptr: surface_destroyed as *mut c_void,
+                },
+                NativeMethod {
+                    name: "doFrameNative".into(),
+                    sig: "(JJ)V".into(),
+                    fn_ptr: do_frame as *mut c_void,
                 },
             ],
         )
