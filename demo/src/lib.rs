@@ -157,8 +157,13 @@ impl ViewPeer for DemoViewPeer {
         let editor = self.editor.editor();
         editor.set_scale(1.0);
         editor.set_width(Some(width as f32 - 2_f32 * text::INSET));
+        self.last_drawn_generation = Default::default();
 
         let window = holder.surface(env).to_native_window(env);
+        // Drop the old surface, if any, that owned the native window
+        // before creating a new one. Otherwise, we crash with
+        // ERROR_NATIVE_WINDOW_IN_USE_KHR.
+        self.render_surface = None;
         let surface = self
             .context
             .instance
