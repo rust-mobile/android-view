@@ -10,7 +10,7 @@ use android_view::{
     jni::{
         JNIEnv, JavaVM,
         objects::JObject,
-        sys::{JNI_VERSION_1_6, JavaVM as RawJavaVM, jint, jlong},
+        sys::{JNI_VERSION_1_6, JavaVM as RawJavaVM, jfloat, jint, jlong},
     },
     ndk::native_window::NativeWindow,
     *,
@@ -19,6 +19,7 @@ use anyhow::Result;
 use log::LevelFilter;
 use std::ffi::c_void;
 use std::num::NonZeroUsize;
+use std::sync::{Arc, Mutex};
 use std::time::Instant;
 use vello::kurbo;
 use vello::peniko::Color;
@@ -88,7 +89,7 @@ struct DemoViewPeer {
     /// The IME cursor area we last sent to the platform.
     last_sent_ime_cursor_area: kurbo::Rect,
 
-    access_adapter: accesskit_android::Adapter,
+    access_adapter: Arc<Mutex<accesskit_android::Adapter>>,
 }
 
 fn build_text_input_node(
@@ -156,7 +157,7 @@ impl DemoViewPeer {
         let view_class = env.get_object_class(&view.0).unwrap();
         let render_surface = &self.render_surface;
         let editor = &mut self.editor;
-        self.access_adapter.update_if_active(
+        self.access_adapter.lock().unwrap().update_if_active(
             || {
                 let mut update = TreeUpdate {
                     nodes: vec![],
@@ -320,6 +321,129 @@ impl ViewPeer for DemoViewPeer {
         view.post_frame_callback(env);
         self.schedule_next_blink(env, view);
     }
+
+    fn populate_accessibility_node_info<'local>(
+        &mut self,
+        env: &mut JNIEnv<'local>,
+        view: &View<'local>,
+        host_screen_x: jint,
+        host_screen_y: jint,
+        virtual_view_id: jint,
+        node_info: &JObject<'local>,
+    ) -> bool {
+        self.access_adapter
+            .clone()
+            .lock()
+            .unwrap()
+            .populate_node_info(
+                self,
+                env,
+                &view.0,
+                host_screen_x,
+                host_screen_y,
+                virtual_view_id,
+                node_info,
+            )
+            .unwrap()
+    }
+
+    fn input_focus<'local>(&mut self, env: &mut JNIEnv<'local>, view: &View<'local>) -> jint {
+        self.access_adapter
+            .clone()
+            .lock()
+            .unwrap()
+            .input_focus(self, env, &view.0)
+    }
+
+    fn virtual_view_at_point<'local>(
+        &mut self,
+        env: &mut JNIEnv<'local>,
+        view: &View<'local>,
+        x: jfloat,
+        y: jfloat,
+    ) -> jint {
+        self.access_adapter
+            .clone()
+            .lock()
+            .unwrap()
+            .virtual_view_at_point(self, env, &view.0, x, y)
+    }
+
+    fn perform_accessibility_action<'local>(
+        &mut self,
+        env: &mut JNIEnv<'local>,
+        view: &View<'local>,
+        virtual_view_id: jint,
+        action: jint,
+    ) -> bool {
+        self.access_adapter.clone().lock().unwrap().perform_action(
+            self,
+            env,
+            &view.0,
+            virtual_view_id,
+            action,
+        )
+    }
+
+    fn accessibility_set_text_selection<'local>(
+        &mut self,
+        env: &mut JNIEnv<'local>,
+        view: &View<'local>,
+        virtual_view_id: jint,
+        anchor: jint,
+        focus: jint,
+    ) -> bool {
+        let view_class = env.get_object_class(&view.0).unwrap();
+        self.access_adapter
+            .clone()
+            .lock()
+            .unwrap()
+            .set_text_selection(
+                self,
+                env,
+                &view_class,
+                &view.0,
+                virtual_view_id,
+                anchor,
+                focus,
+            )
+    }
+
+    fn accessibility_collapse_text_selection<'local>(
+        &mut self,
+        env: &mut JNIEnv<'local>,
+        view: &View<'local>,
+        virtual_view_id: jint,
+    ) -> bool {
+        let view_class = env.get_object_class(&view.0).unwrap();
+        self.access_adapter
+            .clone()
+            .lock()
+            .unwrap()
+            .collapse_text_selection(self, env, &view_class, &view.0, virtual_view_id)
+    }
+
+    fn accessibility_traverse_text<'local>(
+        &mut self,
+        env: &mut JNIEnv<'local>,
+        view: &View<'local>,
+        virtual_view_id: jint,
+        granularity: jint,
+        forward: bool,
+        extend_selection: bool,
+    ) -> bool {
+        let view_class = env.get_object_class(&view.0).unwrap();
+        self.access_adapter.clone().lock().unwrap().traverse_text(
+            self,
+            env,
+            &view_class,
+            &view.0,
+            virtual_view_id,
+            granularity,
+            forward,
+            extend_selection,
+        )
+    }
 }
 
 impl ActivationHandler for DemoViewPeer {
@@ -362,7 +486,7 @@ extern "system" fn new_view_peer<'local>(
         editor: text::Editor::new(text::LOREM),
         last_drawn_generation: Default::default(),
         last_sent_ime_cursor_area: kurbo::Rect::new(f64::NAN, f64::NAN, f64::NAN, f64::NAN),
-        access_adapter: Default::default(),
+        access_adapter: Arc::new(Mutex::new(Default::default())),
     };
     register_view_peer(peer)
 }

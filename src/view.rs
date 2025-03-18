@@ -2,7 +2,7 @@ use jni::{
     JNIEnv, NativeMethod,
     descriptors::Desc,
     objects::{JClass, JIntArray, JObject},
-    sys::{JNI_FALSE, JNI_TRUE, jboolean, jint, jlong},
+    sys::{JNI_FALSE, JNI_TRUE, jboolean, jfloat, jint, jlong},
 };
 use std::{
     collections::BTreeMap,
@@ -138,15 +138,6 @@ pub trait ViewPeer: Send {
         false
     }
 
-    fn on_hover_event<'local>(
-        &mut self,
-        env: &mut JNIEnv<'local>,
-        view: &View<'local>,
-        event: &MotionEvent<'local>,
-    ) -> bool {
-        false
-    }
-
     fn on_focus_changed<'local>(
         &mut self,
         env: &mut JNIEnv<'local>,
@@ -213,6 +204,74 @@ pub trait ViewPeer: Send {
     }
 
     fn delayed_callback<'local>(&mut self, env: &mut JNIEnv<'local>, view: &View<'local>) {}
+
+    fn populate_accessibility_node_info<'local>(
+        &mut self,
+        env: &mut JNIEnv<'local>,
+        view: &View<'local>,
+        host_screen_x: jint,
+        host_screen_y: jint,
+        virtual_view_id: jint,
+        node_info: &JObject<'local>,
+    ) -> bool {
+        false
+    }
+
+    fn input_focus<'local>(&mut self, env: &mut JNIEnv<'local>, view: &View<'local>) -> jint {
+        -1
+    }
+
+    fn virtual_view_at_point<'local>(
+        &mut self,
+        env: &mut JNIEnv<'local>,
+        view: &View<'local>,
+        x: jfloat,
+        y: jfloat,
+    ) -> jint {
+        -1
+    }
+
+    fn perform_accessibility_action<'local>(
+        &mut self,
+        env: &mut JNIEnv<'local>,
+        view: &View<'local>,
+        virtual_view_id: jint,
+        action: jint,
+    ) -> bool {
+        false
+    }
+
+    fn accessibility_set_text_selection<'local>(
+        &mut self,
+        env: &mut JNIEnv<'local>,
+        view: &View<'local>,
+        virtual_view_id: jint,
+        anchor: jint,
+        focus: jint,
+    ) -> bool {
+        false
+    }
+
+    fn accessibility_collapse_text_selection<'local>(
+        &mut self,
+        env: &mut JNIEnv<'local>,
+        view: &View<'local>,
+        virtual_view_id: jint,
+    ) -> bool {
+        false
+    }
+
+    fn accessibility_traverse_text<'local>(
+        &mut self,
+        env: &mut JNIEnv<'local>,
+        view: &View<'local>,
+        virtual_view_id: jint,
+        granularity: jint,
+        forward: bool,
+        extend_selection: bool,
+    ) -> bool {
+        false
+    }
 }
 
 static NEXT_PEER_ID: AtomicI64 = AtomicI64::new(0);
@@ -344,17 +403,6 @@ extern "system" fn on_generic_motion_event<'local>(
     })
 }
 
-extern "system" fn on_hover_event<'local>(
-    mut env: JNIEnv<'local>,
-    view: View<'local>,
-    peer: jlong,
-    event: MotionEvent<'local>,
-) -> jboolean {
-    with_peer(peer, |peer| {
-        to_jboolean(peer.on_hover_event(&mut env, &view, &event))
-    })
-}
-
 extern "system" fn on_focus_changed<'local>(
     mut env: JNIEnv<'local>,
     view: View<'local>,
@@ -475,6 +523,124 @@ extern "system" fn delayed_callback<'local>(
     })
 }
 
+extern "system" fn populate_accessibility_node_info<'local>(
+    mut env: JNIEnv<'local>,
+    view: View<'local>,
+    peer: jlong,
+    host_screen_x: jint,
+    host_screen_y: jint,
+    virtual_view_id: jint,
+    node_info: JObject<'local>,
+) -> jboolean {
+    with_peer(peer, |peer| {
+        if peer.populate_accessibility_node_info(
+            &mut env,
+            &view,
+            host_screen_x,
+            host_screen_y,
+            virtual_view_id,
+            &node_info,
+        ) {
+            JNI_TRUE
+        } else {
+            JNI_FALSE
+        }
+    })
+}
+
+extern "system" fn get_input_focus<'local>(
+    mut env: JNIEnv<'local>,
+    view: View<'local>,
+    peer: jlong,
+) -> jint {
+    with_peer(peer, |peer| peer.input_focus(&mut env, &view))
+}
+
+extern "system" fn get_virtual_view_at_point<'local>(
+    mut env: JNIEnv<'local>,
+    view: View<'local>,
+    peer: jlong,
+    x: jfloat,
+    y: jfloat,
+) -> jint {
+    with_peer(peer, |peer| {
+        peer.virtual_view_at_point(&mut env, &view, x, y)
+    })
+}
+
+extern "system" fn perform_accessibility_action<'local>(
+    mut env: JNIEnv<'local>,
+    view: View<'local>,
+    peer: jlong,
+    virtual_view_id: jint,
+    action: jint,
+) -> jboolean {
+    with_peer(peer, |peer| {
+        if peer.perform_accessibility_action(&mut env, &view, virtual_view_id, action) {
+            JNI_TRUE
+        } else {
+            JNI_FALSE
+        }
+    })
+}
+
+extern "system" fn accessibility_set_text_selection<'local>(
+    mut env: JNIEnv<'local>,
+    view: View<'local>,
+    peer: jlong,
+    virtual_view_id: jint,
+    anchor: jint,
+    focus: jint,
+) -> jboolean {
+    with_peer(peer, |peer| {
+        if peer.accessibility_set_text_selection(&mut env, &view, virtual_view_id, anchor, focus) {
+            JNI_TRUE
+        } else {
+            JNI_FALSE
+        }
+    })
+}
+
+extern "system" fn accessibility_collapse_text_selection<'local>(
+    mut env: JNIEnv<'local>,
+    view: View<'local>,
+    peer: jlong,
+    virtual_view_id: jint,
+) -> jboolean {
+    with_peer(peer, |peer| {
+        if peer.accessibility_collapse_text_selection(&mut env, &view, virtual_view_id) {
+            JNI_TRUE
+        } else {
+            JNI_FALSE
+        }
+    })
+}
+
+extern "system" fn accessibility_traverse_text<'local>(
+    mut env: JNIEnv<'local>,
+    view: View<'local>,
+    peer: jlong,
+    virtual_view_id: jint,
+    granularity: jint,
+    forward: jboolean,
+    extend_selection: jboolean,
+) -> jboolean {
+    with_peer(peer, |peer| {
+        if peer.accessibility_traverse_text(
+            &mut env,
+            &view,
+            virtual_view_id,
+            granularity,
+            forward == JNI_TRUE,
+            extend_selection == JNI_TRUE,
+        ) {
+            JNI_TRUE
+        } else {
+            JNI_FALSE
+        }
+    })
+}
+
 pub fn register_view_peer(peer: impl 'static + ViewPeer) -> jlong {
     let id = NEXT_PEER_ID.fetch_add(1, Ordering::Relaxed);
     let mut map = PEER_MAP.lock().unwrap();
@@ -533,11 +699,6 @@ pub fn register_view_class<'local, 'other_local>(
                     fn_ptr: on_generic_motion_event as *mut c_void,
                 },
                 NativeMethod {
-                    name: "onHoverEventNative".into(),
-                    sig: "(JLandroid/view/MotionEvent;)Z".into(),
-                    fn_ptr: on_hover_event as *mut c_void,
-                },
-                NativeMethod {
                     name: "onFocusChangedNative".into(),
                     sig: "(JZILandroid/graphics/Rect;)V".into(),
                     fn_ptr: on_focus_changed as *mut c_void,
@@ -586,6 +747,41 @@ pub fn register_view_class<'local, 'other_local>(
                     name: "delayedCallbackNative".into(),
                     sig: "(J)V".into(),
                     fn_ptr: delayed_callback as *mut c_void,
+                },
+                NativeMethod {
+                    name: "populateAccessibilityNodeInfoNative".into(),
+                    sig: "(JIIILandroid/view/accessibility/AccessibilityNodeInfo;)Z".into(),
+                    fn_ptr: populate_accessibility_node_info as *mut c_void,
+                },
+                NativeMethod {
+                    name: "getInputFocusNative".into(),
+                    sig: "(J)I".into(),
+                    fn_ptr: get_input_focus as *mut c_void,
+                },
+                NativeMethod {
+                    name: "getVirtualViewAtPointNative".into(),
+                    sig: "(JFF)I".into(),
+                    fn_ptr: get_virtual_view_at_point as *mut c_void,
+                },
+                NativeMethod {
+                    name: "performAccessibilityActionNative".into(),
+                    sig: "(JII)Z".into(),
+                    fn_ptr: perform_accessibility_action as *mut c_void,
+                },
+                NativeMethod {
+                    name: "accessibilitySetTextSelectionNative".into(),
+                    sig: "(JIII)Z".into(),
+                    fn_ptr: accessibility_set_text_selection as *mut c_void,
+                },
+                NativeMethod {
+                    name: "accessibilityCollapseTextSelectionNative".into(),
+                    sig: "(JI)Z".into(),
+                    fn_ptr: accessibility_collapse_text_selection as *mut c_void,
+                },
+                NativeMethod {
+                    name: "accessibilityTraverseTextNative".into(),
+                    sig: "(JIIZZ)Z".into(),
+                    fn_ptr: accessibility_traverse_text as *mut c_void,
                 },
             ],
         )
