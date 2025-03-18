@@ -5,8 +5,29 @@ version = 4
 [[package]]
 name = "accesskit"
 version = "0.18.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "becf0eb5215b6ecb0a739c31c21bd83c4f326524c9b46b7e882d77559b60a529"
+source = "git+https://github.com/AccessKit/accesskit?branch=android-extended-handlers#b37a30bf7fa9c976405b9ff5668308916b47d416"
+
+[[package]]
+name = "accesskit_android"
+version = "0.1.1"
+source = "git+https://github.com/AccessKit/accesskit?branch=android-extended-handlers#b37a30bf7fa9c976405b9ff5668308916b47d416"
+dependencies = [
+ "accesskit",
+ "accesskit_consumer",
+ "jni",
+ "log",
+ "once_cell",
+]
+
+[[package]]
+name = "accesskit_consumer"
+version = "0.27.0"
+source = "git+https://github.com/AccessKit/accesskit?branch=android-extended-handlers#b37a30bf7fa9c976405b9ff5668308916b47d416"
+dependencies = [
+ "accesskit",
+ "hashbrown",
+ "immutable-chunkmap",
+]
 
 [[package]]
 name = "adler2"
@@ -42,6 +63,7 @@ name = "android-view-demo"
 version = "0.1.0"
 dependencies = [
  "accesskit",
+ "accesskit_android",
  "android-view",
  "android_logger",
  "anyhow",
@@ -524,6 +546,15 @@ dependencies = [
  "litemap",
  "tinystr",
  "writeable",
+]
+
+[[package]]
+name = "immutable-chunkmap"
+version = "2.0.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "12f97096f508d54f8f8ab8957862eee2ccd628847b6217af1a335e1c44dee578"
+dependencies = [
+ "arrayvec",
 ]
 
 [[package]]

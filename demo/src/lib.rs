@@ -4,10 +4,12 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use accesskit::{Node, Role, Tree, TreeUpdate};
+use accesskit::{ActionRequest, ActivationHandler, Node, Role, Tree, TreeUpdate};
+use accesskit_android::ActionHandlerWithAndroidContext;
 use android_view::{
     jni::{
         JNIEnv, JavaVM,
+        objects::JObject,
         sys::{JNI_VERSION_1_6, JavaVM as RawJavaVM, jint, jlong},
     },
     ndk::native_window::NativeWindow,
@@ -17,7 +19,6 @@ use anyhow::Result;
 use log::LevelFilter;
 use std::ffi::c_void;
 use std::num::NonZeroUsize;
-use std::sync::Arc;
 use std::time::Instant;
 use vello::kurbo;
 use vello::peniko::Color;
@@ -86,10 +87,47 @@ struct DemoViewPeer {
 
     /// The IME cursor area we last sent to the platform.
     last_sent_ime_cursor_area: kurbo::Rect,
-    // TODO: accessibility
+
+    access_adapter: accesskit_android::Adapter,
+}
+
+fn build_text_input_node(
+    render_surface: &Option<RenderSurface>,
+    editor: &mut text::Editor,
+    update: &mut TreeUpdate,
+) -> Node {
+    let mut node = Node::new(Role::MultilineTextInput);
+    if let Some(surface) = &render_surface {
+        node.set_bounds(accesskit::Rect {
+            x0: 0.0,
+            y0: 0.0,
+            x1: surface.config.width as _,
+            y1: surface.config.height as _,
+        });
+    }
+    editor.accessibility(update, &mut node);
+    node
 }
 
 impl DemoViewPeer {
+    fn build_text_input_node(&mut self, update: &mut TreeUpdate) -> Node {
+        build_text_input_node(&self.render_surface, &mut self.editor, update)
+    }
+
+    fn build_initial_access_tree(&mut self) -> TreeUpdate {
+        let mut update = TreeUpdate {
+            nodes: vec![],
+            tree: Some(Tree::new(WINDOW_ID)),
+            focus: TEXT_INPUT_ID,
+        };
+        let mut node = Node::new(Role::Window);
+        node.push_child(TEXT_INPUT_ID);
+        update.nodes.push((WINDOW_ID, node));
+        let node = self.build_text_input_node(&mut update);
+        update.nodes.push((TEXT_INPUT_ID, node));
+        update
+    }
+
     fn schedule_next_blink<'local>(&self, env: &mut JNIEnv<'local>, view: &View<'local>) {
         if let Some(next_time) = self.editor.next_blink_time() {
             let delay = next_time.duration_since(Instant::now());
@@ -114,8 +152,25 @@ impl DemoViewPeer {
         }
     }
 
-    fn render(&mut self) {
-        // TODO: accessibility
+    fn render<'local>(&mut self, env: &mut JNIEnv<'local>, view: &View<'local>) {
+        let view_class = env.get_object_class(&view.0).unwrap();
+        let render_surface = &self.render_surface;
+        let editor = &mut self.editor;
+        self.access_adapter.update_if_active(
+            || {
+                let mut update = TreeUpdate {
+                    nodes: vec![],
+                    tree: None,
+                    focus: TEXT_INPUT_ID,
+                };
+                let node = build_text_input_node(render_surface, editor, &mut update);
+                update.nodes.push((TEXT_INPUT_ID, node));
+                update
+            },
+            env,
+            &view_class,
+            &view.0,
+        );
 
         // Get the RenderSurface (surface + config).
         let surface = self.render_surface.as_ref().unwrap();
@@ -236,7 +291,7 @@ impl ViewPeer for DemoViewPeer {
             .get_or_insert_with(|| create_vello_renderer(&self.context, &surface));
         self.render_surface = Some(surface);
 
-        self.render();
+        self.render(env, view);
     }
 
     fn surface_destroyed<'local>(
@@ -252,11 +307,11 @@ impl ViewPeer for DemoViewPeer {
 
     fn do_frame<'local>(
         &mut self,
-        _env: &mut JNIEnv<'local>,
-        _view: &View<'local>,
+        env: &mut JNIEnv<'local>,
+        view: &View<'local>,
         _frame_time_nanos: jlong,
     ) {
-        self.render()
+        self.render(env, view)
     }
 
     fn delayed_callback<'local>(&mut self, env: &mut JNIEnv<'local>, view: &View<'local>) {
@@ -264,6 +319,33 @@ impl ViewPeer for DemoViewPeer {
         self.last_drawn_generation = Default::default();
         view.post_frame_callback(env);
         self.schedule_next_blink(env, view);
+    }
+}
+
+impl ActivationHandler for DemoViewPeer {
+    fn request_initial_tree(&mut self) -> Option<TreeUpdate> {
+        Some(self.build_initial_access_tree())
+    }
+}
+
+impl ActionHandlerWithAndroidContext for DemoViewPeer {
+    fn do_action<'local>(
+        &mut self,
+        env: &mut JNIEnv<'local>,
+        view: &JObject<'local>,
+        req: ActionRequest,
+    ) {
+        // TODO: Is there a way to refactor android-view's wrappers so we don't
+        // have to clone the local reference here?
+        let view = View(env.new_local_ref(view).unwrap());
+        if req.target == TEXT_INPUT_ID {
+            self.editor.handle_accesskit_action_request(&req);
+            if self.last_drawn_generation != self.editor.generation()
+                && self.render_surface.is_some()
+            {
+                view.post_frame_callback(env);
+            }
+        }
     }
 }
 
@@ -280,7 +362,7 @@ extern "system" fn new_view_peer<'local>(
         editor: text::Editor::new(text::LOREM),
         last_drawn_generation: Default::default(),
         last_sent_ime_cursor_area: kurbo::Rect::new(f64::NAN, f64::NAN, f64::NAN, f64::NAN),
-        // TODO: accessibility
+        access_adapter: Default::default(),
     };
     register_view_peer(peer)
 }

@@ -9,6 +9,7 @@ crate-type = ["cdylib"]
 
 [dependencies]
 accesskit = "0.18"
+accesskit_android = { git = "https://github.com/AccessKit/accesskit", branch = "android-extended-handlers" }
 android-view = { path = ".." }
 android_logger = "0.15.0"
 anyhow = "1.0.96"
