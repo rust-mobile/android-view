@@ -25,6 +25,34 @@ impl<'local> View<'local> {
             .v()
             .unwrap()
     }
+
+    pub fn remove_frame_callback(&self, env: &mut JNIEnv<'local>) {
+        env.call_method(&self.0, "removeFrameCallback", "()V", &[])
+            .unwrap()
+            .v()
+            .unwrap()
+    }
+
+    pub fn post_delayed(&self, env: &mut JNIEnv<'local>, delay_millis: jlong) -> bool {
+        env.call_method(&self.0, "postDelayed", "(J)Z", &[delay_millis.into()])
+            .unwrap()
+            .z()
+            .unwrap()
+    }
+
+    pub fn remove_delayed_callbacks(&self, env: &mut JNIEnv<'local>) -> bool {
+        env.call_method(&self.0, "removeDelayedCallbacks", "()Z", &[])
+            .unwrap()
+            .z()
+            .unwrap()
+    }
+
+    pub fn is_focused(&self, env: &mut JNIEnv<'local>) -> bool {
+        env.call_method(&self.0, "isFocused", "()Z", &[])
+            .unwrap()
+            .z()
+            .unwrap()
+    }
 }
 
 #[allow(unused_variables)]
@@ -183,6 +211,8 @@ pub trait ViewPeer: Send {
         frame_time_nanos: jlong,
     ) {
     }
+
+    fn delayed_callback<'local>(&mut self, env: &mut JNIEnv<'local>, view: &View<'local>) {}
 }
 
 static NEXT_PEER_ID: AtomicI64 = AtomicI64::new(0);
@@ -373,6 +403,8 @@ extern "system" fn on_detached_from_window<'local>(
     let mut map = PEER_MAP.lock().unwrap();
     let mut peer = map.remove(&peer).unwrap();
     peer.on_detached_from_window(&mut env, &view);
+    view.remove_frame_callback(&mut env);
+    view.remove_delayed_callbacks(&mut env);
 }
 
 extern "system" fn on_window_visibility_changed<'local>(
@@ -430,6 +462,16 @@ extern "system" fn do_frame<'local>(
 ) {
     with_peer(peer, |peer| {
         peer.do_frame(&mut env, &view, frame_time_nanos);
+    })
+}
+
+extern "system" fn delayed_callback<'local>(
+    mut env: JNIEnv<'local>,
+    view: View<'local>,
+    peer: jlong,
+) {
+    with_peer(peer, |peer| {
+        peer.delayed_callback(&mut env, &view);
     })
 }
 
@@ -539,6 +581,11 @@ pub fn register_view_class<'local, 'other_local>(
                     name: "doFrameNative".into(),
                     sig: "(JJ)V".into(),
                     fn_ptr: do_frame as *mut c_void,
+                },
+                NativeMethod {
+                    name: "delayedCallbackNative".into(),
+                    sig: "(J)V".into(),
+                    fn_ptr: delayed_callback as *mut c_void,
                 },
             ],
         )

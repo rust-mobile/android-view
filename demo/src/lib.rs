@@ -18,6 +18,7 @@ use log::LevelFilter;
 use std::ffi::c_void;
 use std::num::NonZeroUsize;
 use std::sync::Arc;
+use std::time::Instant;
 use vello::kurbo;
 use vello::peniko::Color;
 use vello::util::{RenderContext, RenderSurface};
@@ -89,6 +90,30 @@ struct DemoViewPeer {
 }
 
 impl DemoViewPeer {
+    fn schedule_next_blink<'local>(&self, env: &mut JNIEnv<'local>, view: &View<'local>) {
+        if let Some(next_time) = self.editor.next_blink_time() {
+            let delay = next_time.duration_since(Instant::now());
+            view.post_delayed(env, delay.as_millis() as _);
+        }
+    }
+
+    fn update_cursor_state<'local>(
+        &mut self,
+        env: &mut JNIEnv<'local>,
+        view: &View<'local>,
+        focused: bool,
+    ) {
+        self.last_drawn_generation = Default::default();
+        view.remove_delayed_callbacks(env);
+        if focused {
+            self.editor.cursor_reset();
+            self.schedule_next_blink(env, view);
+        } else {
+            self.editor.disable_blink();
+            self.editor.cursor_blink();
+        }
+    }
+
     fn render(&mut self) {
         // TODO: accessibility
 
@@ -145,10 +170,25 @@ impl DemoViewPeer {
 impl ViewPeer for DemoViewPeer {
     // TODO
 
+    fn on_focus_changed<'local>(
+        &mut self,
+        env: &mut JNIEnv<'local>,
+        view: &View<'local>,
+        gain_focus: bool,
+        _direction: jint,
+        _previously_focused_rect: Option<&Rect<'local>>,
+    ) {
+        if self.render_surface.is_none() {
+            return;
+        }
+        self.update_cursor_state(env, view, gain_focus);
+        view.post_frame_callback(env);
+    }
+
     fn surface_changed<'local>(
         &mut self,
         env: &mut JNIEnv<'local>,
-        _view: &View<'local>,
+        view: &View<'local>,
         holder: &SurfaceHolder<'local>,
         _format: jint,
         width: jint,
@@ -158,6 +198,8 @@ impl ViewPeer for DemoViewPeer {
         editor.set_scale(1.0);
         editor.set_width(Some(width as f32 - 2_f32 * text::INSET));
         self.last_drawn_generation = Default::default();
+        let focused = view.is_focused(env);
+        self.update_cursor_state(env, view, focused);
 
         let window = holder.surface(env).to_native_window(env);
         // Drop the old surface, if any, that owned the native window
@@ -199,11 +241,13 @@ impl ViewPeer for DemoViewPeer {
 
     fn surface_destroyed<'local>(
         &mut self,
-        _env: &mut JNIEnv<'local>,
-        _view: &View<'local>,
+        env: &mut JNIEnv<'local>,
+        view: &View<'local>,
         _holder: &SurfaceHolder<'local>,
     ) {
         self.render_surface = None;
+        view.remove_frame_callback(env);
+        view.remove_delayed_callbacks(env);
     }
 
     fn do_frame<'local>(
@@ -213,6 +257,13 @@ impl ViewPeer for DemoViewPeer {
         _frame_time_nanos: jlong,
     ) {
         self.render()
+    }
+
+    fn delayed_callback<'local>(&mut self, env: &mut JNIEnv<'local>, view: &View<'local>) {
+        self.editor.cursor_blink();
+        self.last_drawn_generation = Default::default();
+        view.post_frame_callback(env);
+        self.schedule_next_blink(env, view);
     }
 }
 

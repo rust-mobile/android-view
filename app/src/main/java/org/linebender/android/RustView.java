@@ -159,10 +159,31 @@ public abstract class RustView extends SurfaceView implements SurfaceHolder.Call
         c.postFrameCallback(this);
     }
 
+    void removeFrameCallback() {
+        Choreographer.getInstance().removeFrameCallback(this);
+    }
+
     private native void doFrameNative(long peer, long frameTimeNanos);
 
     @Override
     public void doFrame(long frameTimeNanos) {
         doFrameNative(mViewPeer, frameTimeNanos);
+    }
+
+    private native void delayedCallbackNative(long peer);
+
+    private final Runnable mDelayedCallback = new Runnable() {
+        @Override
+        public void run() {
+            delayedCallbackNative(mViewPeer);
+        }
+    };
+
+    boolean postDelayed(long delayMillis) {
+        return postDelayed(mDelayedCallback, delayMillis);
+    }
+
+    boolean removeDelayedCallbacks() {
+        return removeCallbacks(mDelayedCallback);
     }
 }
