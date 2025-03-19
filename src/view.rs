@@ -13,7 +13,7 @@ use std::{
     },
 };
 
-use crate::{context::*, events::*, graphics::*, surface::*};
+use crate::{context::*, events::*, graphics::*, ime::*, surface::*};
 
 #[repr(transparent)]
 pub struct View<'local>(pub JObject<'local>);
@@ -271,6 +271,10 @@ pub trait ViewPeer: Send {
         extend_selection: bool,
     ) -> bool {
         false
+    }
+
+    fn as_input_connection<'a>(&'a mut self) -> Option<&'a mut dyn InputConnection> {
+        None
     }
 }
 

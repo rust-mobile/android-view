@@ -9,6 +9,8 @@ mod events;
 pub use events::*;
 mod graphics;
 pub use graphics::*;
+mod ime;
+pub use ime::*;
 mod surface;
 pub use surface::*;
 mod view;

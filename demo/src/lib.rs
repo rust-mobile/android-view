@@ -498,6 +498,21 @@ impl ViewPeer for DemoViewPeer {
             extend_selection,
         )
     }
+
+    fn as_input_connection(&mut self) -> Option<&mut dyn InputConnection> {
+        Some(self)
+    }
+}
+
+impl InputConnection for DemoViewPeer {
+    fn text_before_cursor<'local>(
+        &mut self,
+        env: &mut JNIEnv<'local>,
+        view: &View<'local>,
+        n: usize,
+    ) -> Option<String> {
+        todo!()
+    }
 }
 
 extern "system" fn new_view_peer<'local>(
