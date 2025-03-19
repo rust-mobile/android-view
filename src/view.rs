@@ -273,8 +273,8 @@ pub trait ViewPeer: Send {
         false
     }
 
-    fn as_input_connection<'a>(&'a mut self) -> Option<&'a mut dyn InputConnection> {
-        None
+    fn as_input_connection<'a>(&'a mut self) -> &'a mut dyn InputConnection {
+        unimplemented!()
     }
 }
 

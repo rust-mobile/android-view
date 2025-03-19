@@ -499,8 +499,8 @@ impl ViewPeer for DemoViewPeer {
         )
     }
 
-    fn as_input_connection(&mut self) -> Option<&mut dyn InputConnection> {
-        Some(self)
+    fn as_input_connection(&mut self) -> &mut dyn InputConnection {
+        self
     }
 }
 
