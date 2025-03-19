@@ -19,7 +19,6 @@ use anyhow::Result;
 use log::LevelFilter;
 use std::ffi::c_void;
 use std::num::NonZeroUsize;
-use std::sync::{Arc, Mutex};
 use std::time::Instant;
 use vello::kurbo;
 use vello::peniko::Color;
@@ -66,6 +65,74 @@ fn create_vello_renderer(render_cx: &RenderContext, surface: &RenderSurface<'_>)
     .expect("Couldn't create renderer")
 }
 
+struct EditorAccessTreeSource<'a> {
+    editor: &'a mut text::Editor,
+    render_surface: &'a Option<RenderSurface<'static>>,
+}
+
+impl EditorAccessTreeSource<'_> {
+    fn build_text_input_node(&mut self, update: &mut TreeUpdate) -> Node {
+        let mut node = Node::new(Role::MultilineTextInput);
+        if let Some(surface) = &self.render_surface {
+            node.set_bounds(accesskit::Rect {
+                x0: 0.0,
+                y0: 0.0,
+                x1: surface.config.width as _,
+                y1: surface.config.height as _,
+            });
+        }
+        self.editor.accessibility(update, &mut node);
+        node
+    }
+
+    fn build_initial_tree(&mut self) -> TreeUpdate {
+        let mut update = TreeUpdate {
+            nodes: vec![],
+            tree: Some(Tree::new(WINDOW_ID)),
+            focus: TEXT_INPUT_ID,
+        };
+        let mut node = Node::new(Role::Window);
+        node.push_child(TEXT_INPUT_ID);
+        update.nodes.push((WINDOW_ID, node));
+        let node = self.build_text_input_node(&mut update);
+        update.nodes.push((TEXT_INPUT_ID, node));
+        update
+    }
+}
+
+impl ActivationHandler for EditorAccessTreeSource<'_> {
+    fn request_initial_tree(&mut self) -> Option<TreeUpdate> {
+        Some(self.build_initial_tree())
+    }
+}
+
+struct EditorAccessActionHandler<'a> {
+    editor: &'a mut text::Editor,
+    last_drawn_generation: &'a text::Generation,
+    render_surface: &'a Option<RenderSurface<'static>>,
+}
+
+impl ActionHandlerWithAndroidContext for EditorAccessActionHandler<'_> {
+    fn do_action<'local>(
+        &mut self,
+        env: &mut JNIEnv<'local>,
+        view: &JObject<'local>,
+        req: ActionRequest,
+    ) {
+        if req.target == TEXT_INPUT_ID {
+            self.editor.handle_accesskit_action_request(&req);
+            if *self.last_drawn_generation != self.editor.generation()
+                && self.render_surface.is_some()
+            {
+                // TODO: Is there a way to refactor android-view's wrappers so
+                // we don't have to clone the local reference here?
+                let view = View(env.new_local_ref(view).unwrap());
+                view.post_frame_callback(env);
+            }
+        }
+    }
+}
+
 struct DemoViewPeer {
     /// The vello `RenderContext` which is a global context that lasts for the
     /// lifetime of the application.
@@ -89,47 +156,10 @@ struct DemoViewPeer {
     /// The IME cursor area we last sent to the platform.
     last_sent_ime_cursor_area: kurbo::Rect,
 
-    // TODO: refactor so we don't have to use Arc and Mutex here
-    access_adapter: Arc<Mutex<accesskit_android::Adapter>>,
-}
-
-fn build_text_input_node(
-    render_surface: &Option<RenderSurface>,
-    editor: &mut text::Editor,
-    update: &mut TreeUpdate,
-) -> Node {
-    let mut node = Node::new(Role::MultilineTextInput);
-    if let Some(surface) = &render_surface {
-        node.set_bounds(accesskit::Rect {
-            x0: 0.0,
-            y0: 0.0,
-            x1: surface.config.width as _,
-            y1: surface.config.height as _,
-        });
-    }
-    editor.accessibility(update, &mut node);
-    node
+    access_adapter: accesskit_android::Adapter,
 }
 
 impl DemoViewPeer {
-    fn build_text_input_node(&mut self, update: &mut TreeUpdate) -> Node {
-        build_text_input_node(&self.render_surface, &mut self.editor, update)
-    }
-
-    fn build_initial_access_tree(&mut self) -> TreeUpdate {
-        let mut update = TreeUpdate {
-            nodes: vec![],
-            tree: Some(Tree::new(WINDOW_ID)),
-            focus: TEXT_INPUT_ID,
-        };
-        let mut node = Node::new(Role::Window);
-        node.push_child(TEXT_INPUT_ID);
-        update.nodes.push((WINDOW_ID, node));
-        let node = self.build_text_input_node(&mut update);
-        update.nodes.push((TEXT_INPUT_ID, node));
-        update
-    }
-
     fn schedule_next_blink<'local>(&self, env: &mut JNIEnv<'local>, view: &View<'local>) {
         if let Some(next_time) = self.editor.next_blink_time() {
             let delay = next_time.duration_since(Instant::now());
@@ -156,16 +186,18 @@ impl DemoViewPeer {
 
     fn render<'local>(&mut self, env: &mut JNIEnv<'local>, view: &View<'local>) {
         let view_class = env.get_object_class(&view.0).unwrap();
-        let render_surface = &self.render_surface;
-        let editor = &mut self.editor;
-        self.access_adapter.lock().unwrap().update_if_active(
+        let mut tree_source = EditorAccessTreeSource {
+            render_surface: &self.render_surface,
+            editor: &mut self.editor,
+        };
+        self.access_adapter.update_if_active(
             || {
                 let mut update = TreeUpdate {
                     nodes: vec![],
                     tree: None,
                     focus: TEXT_INPUT_ID,
                 };
-                let node = build_text_input_node(render_surface, editor, &mut update);
+                let node = tree_source.build_text_input_node(&mut update);
                 update.nodes.push((TEXT_INPUT_ID, node));
                 update
             },
@@ -332,12 +364,13 @@ impl ViewPeer for DemoViewPeer {
         virtual_view_id: jint,
         node_info: &JObject<'local>,
     ) -> bool {
+        let mut tree_source = EditorAccessTreeSource {
+            render_surface: &self.render_surface,
+            editor: &mut self.editor,
+        };
         self.access_adapter
-            .clone()
-            .lock()
-            .unwrap()
             .populate_node_info(
-                self,
+                &mut tree_source,
                 env,
                 &view.0,
                 host_screen_x,
@@ -349,11 +382,12 @@ impl ViewPeer for DemoViewPeer {
     }
 
     fn input_focus<'local>(&mut self, env: &mut JNIEnv<'local>, view: &View<'local>) -> jint {
+        let mut tree_source = EditorAccessTreeSource {
+            render_surface: &self.render_surface,
+            editor: &mut self.editor,
+        };
         self.access_adapter
-            .clone()
-            .lock()
-            .unwrap()
-            .input_focus(self, env, &view.0)
+            .input_focus(&mut tree_source, env, &view.0)
     }
 
     fn virtual_view_at_point<'local>(
@@ -363,11 +397,12 @@ impl ViewPeer for DemoViewPeer {
         x: jfloat,
         y: jfloat,
     ) -> jint {
+        let mut tree_source = EditorAccessTreeSource {
+            render_surface: &self.render_surface,
+            editor: &mut self.editor,
+        };
         self.access_adapter
-            .clone()
-            .lock()
-            .unwrap()
-            .virtual_view_at_point(self, env, &view.0, x, y)
+            .virtual_view_at_point(&mut tree_source, env, &view.0, x, y)
     }
 
     fn perform_accessibility_action<'local>(
@@ -377,8 +412,13 @@ impl ViewPeer for DemoViewPeer {
         virtual_view_id: jint,
         action: jint,
     ) -> bool {
-        self.access_adapter.clone().lock().unwrap().perform_action(
-            self,
+        let mut action_handler = EditorAccessActionHandler {
+            render_surface: &self.render_surface,
+            editor: &mut self.editor,
+            last_drawn_generation: &self.last_drawn_generation,
+        };
+        self.access_adapter.perform_action(
+            &mut action_handler,
             env,
             &view.0,
             virtual_view_id,
@@ -394,20 +434,21 @@ impl ViewPeer for DemoViewPeer {
         anchor: jint,
         focus: jint,
     ) -> bool {
+        let mut action_handler = EditorAccessActionHandler {
+            render_surface: &self.render_surface,
+            editor: &mut self.editor,
+            last_drawn_generation: &self.last_drawn_generation,
+        };
         let view_class = env.get_object_class(&view.0).unwrap();
-        self.access_adapter
-            .clone()
-            .lock()
-            .unwrap()
-            .set_text_selection(
-                self,
-                env,
-                &view_class,
-                &view.0,
-                virtual_view_id,
-                anchor,
-                focus,
-            )
+        self.access_adapter.set_text_selection(
+            &mut action_handler,
+            env,
+            &view_class,
+            &view.0,
+            virtual_view_id,
+            anchor,
+            focus,
+        )
     }
 
     fn accessibility_collapse_text_selection<'local>(
@@ -416,12 +457,19 @@ impl ViewPeer for DemoViewPeer {
         view: &View<'local>,
         virtual_view_id: jint,
     ) -> bool {
+        let mut action_handler = EditorAccessActionHandler {
+            render_surface: &self.render_surface,
+            editor: &mut self.editor,
+            last_drawn_generation: &self.last_drawn_generation,
+        };
         let view_class = env.get_object_class(&view.0).unwrap();
-        self.access_adapter
-            .clone()
-            .lock()
-            .unwrap()
-            .collapse_text_selection(self, env, &view_class, &view.0, virtual_view_id)
+        self.access_adapter.collapse_text_selection(
+            &mut action_handler,
+            env,
+            &view_class,
+            &view.0,
+            virtual_view_id,
+        )
     }
 
     fn accessibility_traverse_text<'local>(
@@ -433,9 +481,14 @@ impl ViewPeer for DemoViewPeer {
         forward: bool,
         extend_selection: bool,
     ) -> bool {
+        let mut action_handler = EditorAccessActionHandler {
+            render_surface: &self.render_surface,
+            editor: &mut self.editor,
+            last_drawn_generation: &self.last_drawn_generation,
+        };
         let view_class = env.get_object_class(&view.0).unwrap();
-        self.access_adapter.clone().lock().unwrap().traverse_text(
-            self,
+        self.access_adapter.traverse_text(
+            &mut action_handler,
             env,
             &view_class,
             &view.0,
@@ -444,33 +497,6 @@ impl ViewPeer for DemoViewPeer {
             forward,
             extend_selection,
         )
-    }
-}
-
-impl ActivationHandler for DemoViewPeer {
-    fn request_initial_tree(&mut self) -> Option<TreeUpdate> {
-        Some(self.build_initial_access_tree())
-    }
-}
-
-impl ActionHandlerWithAndroidContext for DemoViewPeer {
-    fn do_action<'local>(
-        &mut self,
-        env: &mut JNIEnv<'local>,
-        view: &JObject<'local>,
-        req: ActionRequest,
-    ) {
-        // TODO: Is there a way to refactor android-view's wrappers so we don't
-        // have to clone the local reference here?
-        let view = View(env.new_local_ref(view).unwrap());
-        if req.target == TEXT_INPUT_ID {
-            self.editor.handle_accesskit_action_request(&req);
-            if self.last_drawn_generation != self.editor.generation()
-                && self.render_surface.is_some()
-            {
-                view.post_frame_callback(env);
-            }
-        }
     }
 }
 
@@ -487,7 +513,7 @@ extern "system" fn new_view_peer<'local>(
         editor: text::Editor::new(text::LOREM),
         last_drawn_generation: Default::default(),
         last_sent_ime_cursor_area: kurbo::Rect::new(f64::NAN, f64::NAN, f64::NAN, f64::NAN),
-        access_adapter: Arc::new(Mutex::new(Default::default())),
+        access_adapter: Default::default(),
     };
     register_view_peer(peer)
 }
