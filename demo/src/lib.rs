@@ -89,6 +89,7 @@ struct DemoViewPeer {
     /// The IME cursor area we last sent to the platform.
     last_sent_ime_cursor_area: kurbo::Rect,
 
+    // TODO: refactor so we don't have to use Arc and Mutex here
     access_adapter: Arc<Mutex<accesskit_android::Adapter>>,
 }
 
