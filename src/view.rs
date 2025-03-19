@@ -273,6 +273,15 @@ pub trait ViewPeer: Send {
         false
     }
 
+    fn on_create_input_connection<'local>(
+        &mut self,
+        env: &mut JNIEnv<'local>,
+        view: &View<'local>,
+        out_attrs: &EditorInfo<'local>,
+    ) -> bool {
+        false
+    }
+
     fn as_input_connection<'a>(&'a mut self) -> &'a mut dyn InputConnection {
         unimplemented!()
     }
