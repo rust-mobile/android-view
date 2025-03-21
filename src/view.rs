@@ -290,13 +290,22 @@ pub trait ViewPeer: Send {
 static NEXT_PEER_ID: AtomicI64 = AtomicI64::new(0);
 static PEER_MAP: Mutex<BTreeMap<jlong, Box<dyn ViewPeer>>> = Mutex::new(BTreeMap::new());
 
-fn with_peer<F, T>(id: jlong, f: F) -> T
+fn with_peer_and_default<F, T>(id: jlong, default: T, f: F) -> T
 where
     F: FnOnce(&mut dyn ViewPeer) -> T,
 {
     let mut map = PEER_MAP.lock().unwrap();
-    let peer = map.get_mut(&id).unwrap();
+    let Some(peer) = map.get_mut(&id) else {
+        return default;
+    };
     f(&mut **peer)
+}
+
+fn with_peer<F, T: Default>(id: jlong, f: F) -> T
+where
+    F: FnOnce(&mut dyn ViewPeer) -> T,
+{
+    with_peer_and_default(id, T::default(), f)
 }
 
 extern "system" fn on_measure<'local>(
@@ -566,7 +575,7 @@ extern "system" fn get_input_focus<'local>(
     view: View<'local>,
     peer: jlong,
 ) -> jint {
-    with_peer(peer, |peer| peer.input_focus(&mut env, &view))
+    with_peer_and_default(peer, -1, |peer| peer.input_focus(&mut env, &view))
 }
 
 extern "system" fn get_virtual_view_at_point<'local>(
@@ -576,7 +585,7 @@ extern "system" fn get_virtual_view_at_point<'local>(
     x: jfloat,
     y: jfloat,
 ) -> jint {
-    with_peer(peer, |peer| {
+    with_peer_and_default(peer, -1, |peer| {
         peer.virtual_view_at_point(&mut env, &view, x, y)
     })
 }
