@@ -290,7 +290,7 @@ pub trait ViewPeer: Send {
 static NEXT_PEER_ID: AtomicI64 = AtomicI64::new(0);
 static PEER_MAP: Mutex<BTreeMap<jlong, Box<dyn ViewPeer>>> = Mutex::new(BTreeMap::new());
 
-fn with_peer_and_default<F, T>(id: jlong, default: T, f: F) -> T
+pub(crate) fn with_peer_and_default<F, T>(id: jlong, default: T, f: F) -> T
 where
     F: FnOnce(&mut dyn ViewPeer) -> T,
 {
@@ -663,6 +663,21 @@ extern "system" fn accessibility_traverse_text<'local>(
     })
 }
 
+extern "system" fn on_create_input_connection<'local>(
+    mut env: JNIEnv<'local>,
+    view: View<'local>,
+    peer: jlong,
+    out_attrs: EditorInfo<'local>,
+) -> jboolean {
+    with_peer(peer, |peer| {
+        if peer.on_create_input_connection(&mut env, &view, &out_attrs) {
+            JNI_TRUE
+        } else {
+            JNI_FALSE
+        }
+    })
+}
+
 pub fn register_view_peer(peer: impl 'static + ViewPeer) -> jlong {
     let id = NEXT_PEER_ID.fetch_add(1, Ordering::Relaxed);
     let mut map = PEER_MAP.lock().unwrap();
@@ -804,6 +819,111 @@ pub fn register_view_class<'local, 'other_local>(
                     name: "accessibilityTraverseTextNative".into(),
                     sig: "(JIIZZ)Z".into(),
                     fn_ptr: accessibility_traverse_text as *mut c_void,
+                },
+                NativeMethod {
+                    name: "onCreateInputConnectionNative".into(),
+                    sig: "(JLandroid/view/inputmethod/EditorInfo;)Z".into(),
+                    fn_ptr: on_create_input_connection as *mut c_void,
+                },
+                NativeMethod {
+                    name: "getTextBeforeCursorNative".into(),
+                    sig: "(JI)Ljava/lang/String;".into(),
+                    fn_ptr: get_text_before_cursor as *mut c_void,
+                },
+                NativeMethod {
+                    name: "getTextAfterCursorNative".into(),
+                    sig: "(JI)Ljava/lang/String;".into(),
+                    fn_ptr: get_text_after_cursor as *mut c_void,
+                },
+                NativeMethod {
+                    name: "getSelectedTextNative".into(),
+                    sig: "(J)Ljava/lang/String;".into(),
+                    fn_ptr: get_selected_text as *mut c_void,
+                },
+                NativeMethod {
+                    name: "getCursorCapsModeNative".into(),
+                    sig: "(JI)I".into(),
+                    fn_ptr: get_cursor_caps_mode as *mut c_void,
+                },
+                NativeMethod {
+                    name: "deleteSurroundingTextNative".into(),
+                    sig: "(JII)Z".into(),
+                    fn_ptr: delete_surrounding_text as *mut c_void,
+                },
+                NativeMethod {
+                    name: "deleteSurroundingTextInCodePointsNative".into(),
+                    sig: "(JII)Z".into(),
+                    fn_ptr: delete_surrounding_text_in_code_points as *mut c_void,
+                },
+                NativeMethod {
+                    name: "setComposingTextNative".into(),
+                    sig: "(JLjava/lang/String;I)Z".into(),
+                    fn_ptr: set_composing_text as *mut c_void,
+                },
+                NativeMethod {
+                    name: "setComposingRegionNative".into(),
+                    sig: "(JII)Z".into(),
+                    fn_ptr: set_composing_region as *mut c_void,
+                },
+                NativeMethod {
+                    name: "finishComposingTextNative".into(),
+                    sig: "(J)Z".into(),
+                    fn_ptr: finish_composing_text as *mut c_void,
+                },
+                NativeMethod {
+                    name: "commitTextNative".into(),
+                    sig: "(JLjava/lang/String;I)Z".into(),
+                    fn_ptr: commit_text as *mut c_void,
+                },
+                NativeMethod {
+                    name: "setSelectionNative".into(),
+                    sig: "(JII)Z".into(),
+                    fn_ptr: set_selection as *mut c_void,
+                },
+                NativeMethod {
+                    name: "performEditorActionNative".into(),
+                    sig: "(JI)Z".into(),
+                    fn_ptr: perform_editor_action as *mut c_void,
+                },
+                NativeMethod {
+                    name: "performContextMenuActionNative".into(),
+                    sig: "(JI)Z".into(),
+                    fn_ptr: perform_context_menu_action as *mut c_void,
+                },
+                NativeMethod {
+                    name: "beginBatchEditNative".into(),
+                    sig: "(J)Z".into(),
+                    fn_ptr: begin_batch_edit as *mut c_void,
+                },
+                NativeMethod {
+                    name: "endBatchEditNative".into(),
+                    sig: "(J)Z".into(),
+                    fn_ptr: end_batch_edit as *mut c_void,
+                },
+                NativeMethod {
+                    name: "inputConnectionSendKeyEventNative".into(),
+                    sig: "(JLandroid/view/KeyEvent;)Z".into(),
+                    fn_ptr: input_connection_send_key_event as *mut c_void,
+                },
+                NativeMethod {
+                    name: "inputConnectionClearMetaKeyStatesNative".into(),
+                    sig: "(JI)Z".into(),
+                    fn_ptr: input_connection_clear_meta_key_states as *mut c_void,
+                },
+                NativeMethod {
+                    name: "inputConnectionReportFullscreenModeNative".into(),
+                    sig: "(JZ)Z".into(),
+                    fn_ptr: input_connection_report_fullscreen_mode as *mut c_void,
+                },
+                NativeMethod {
+                    name: "requestCursorUpdatesNative".into(),
+                    sig: "(JI)Z".into(),
+                    fn_ptr: request_cursor_updates as *mut c_void,
+                },
+                NativeMethod {
+                    name: "closeInputConnectionNative".into(),
+                    sig: "(J)V".into(),
+                    fn_ptr: close_input_connection as *mut c_void,
                 },
             ],
         )

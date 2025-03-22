@@ -24,9 +24,11 @@ import android.view.accessibility.AccessibilityEvent;
 import android.view.accessibility.AccessibilityNodeInfo;
 import android.view.accessibility.AccessibilityNodeInfo.AccessibilityAction;
 import android.view.accessibility.AccessibilityNodeProvider;
+import android.view.inputmethod.EditorInfo;
+import android.view.inputmethod.InputConnection;
 
 public abstract class RustView extends SurfaceView implements SurfaceHolder.Callback, Choreographer.FrameCallback {
-    private final long mViewPeer;
+    final long mViewPeer;
 
     protected abstract long newViewPeer(Context context);
 
@@ -501,4 +503,54 @@ public abstract class RustView extends SurfaceView implements SurfaceHolder.Call
             }
         };
     }
+
+    private native boolean onCreateInputConnectionNative(long peer, EditorInfo outAttrs);
+
+    @Override
+    public InputConnection onCreateInputConnection(EditorInfo outAttrs) {
+        if (!onCreateInputConnectionNative(mViewPeer, outAttrs)) {
+            return null;
+        }
+        return new RustInputConnection(this);
+    }
+
+    native String getTextBeforeCursorNative(long peer, int n);
+
+    native String getTextAfterCursorNative(long peer, int n);
+
+    native String getSelectedTextNative(long peer);
+
+    native int getCursorCapsModeNative(long peer, int reqModes);
+
+    native boolean deleteSurroundingTextNative(long peer, int beforeLength, int afterLength);
+
+    native boolean deleteSurroundingTextInCodePointsNative(long peer, int beforeLength, int afterLength);
+
+    native boolean setComposingTextNative(long peer, String text, int newCursorPosition);
+
+    native boolean setComposingRegionNative(long peer, int start, int end);
+
+    native boolean finishComposingTextNative(long peer);
+
+    native boolean commitTextNative(long peer, String text, int newCursorPosition);
+
+    native boolean setSelectionNative(long peer, int start, int end);
+
+    native boolean performEditorActionNative(long peer, int editorAction);
+
+    native boolean performContextMenuActionNative(long peer, int id);
+
+    native boolean beginBatchEditNative(long peer);
+
+    native boolean endBatchEditNative(long peer);
+
+    native boolean inputConnectionSendKeyEventNative(long peer, KeyEvent event);
+
+    native boolean inputConnectionClearMetaKeyStatesNative(long peer, int states);
+
+    native boolean inputConnectionReportFullscreenModeNative(long peer, boolean enabled);
+
+    native boolean requestCursorUpdatesNative(long peer, int cursorUpdateMode);
+
+    native void closeInputConnectionNative(long peer);
 }
