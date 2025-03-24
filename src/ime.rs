@@ -87,7 +87,32 @@ impl<'local> InputMethodManager<'local> {
 #[repr(transparent)]
 pub struct EditorInfo<'local>(pub JObject<'local>);
 
-// TODO: bind the EditorInfo fields and methods most commonly used by editors
+impl<'local> EditorInfo<'local> {
+    pub fn set_input_type(&self, env: &mut JNIEnv<'local>, value: jint) {
+        env.set_field(&self.0, "inputType", "I", value.into())
+            .unwrap();
+    }
+
+    pub fn set_ime_options(&self, env: &mut JNIEnv<'local>, value: jint) {
+        env.set_field(&self.0, "imeOptions", "I", value.into())
+            .unwrap();
+    }
+
+    pub fn set_initial_sel_start(&self, env: &mut JNIEnv<'local>, value: jint) {
+        env.set_field(&self.0, "initialSelStart", "I", value.into())
+            .unwrap();
+    }
+
+    pub fn set_initial_sel_end(&self, env: &mut JNIEnv<'local>, value: jint) {
+        env.set_field(&self.0, "initialSelEnd", "I", value.into())
+            .unwrap();
+    }
+
+    pub fn set_initial_caps_mode(&self, env: &mut JNIEnv<'local>, value: jint) {
+        env.set_field(&self.0, "initialCapsMode", "I", value.into())
+            .unwrap();
+    }
+}
 
 #[allow(unused_variables)]
 pub trait InputConnection {
