@@ -5,12 +5,89 @@ use jni::{
 };
 use std::borrow::Cow;
 
-use crate::{events::KeyEvent, view::*};
+use crate::{binder::*, events::KeyEvent, view::*};
+
+#[repr(transparent)]
+pub struct InputMethodManager<'local>(pub JObject<'local>);
+
+impl<'local> InputMethodManager<'local> {
+    pub fn show_soft_input(
+        &self,
+        env: &mut JNIEnv<'local>,
+        view: &View<'local>,
+        flags: jint,
+    ) -> bool {
+        env.call_method(
+            &self.0,
+            "showSoftInput",
+            "(Landroid/view/View;I)Z",
+            &[(&view.0).into(), flags.into()],
+        )
+        .unwrap()
+        .z()
+        .unwrap()
+    }
+
+    pub fn hide_soft_input_from_window(
+        &self,
+        env: &mut JNIEnv<'local>,
+        window_token: &IBinder<'local>,
+        flags: jint,
+    ) -> bool {
+        env.call_method(
+            &self.0,
+            "hideSoftInputFromWindow",
+            "(Landroid/os/IBinder;I)Z",
+            &[(&window_token.0).into(), flags.into()],
+        )
+        .unwrap()
+        .z()
+        .unwrap()
+    }
+
+    pub fn restart_input(&self, env: &mut JNIEnv<'local>, view: &View<'local>) {
+        env.call_method(
+            &self.0,
+            "restartInput",
+            "(Landroid/view/View;)V",
+            &[(&view.0).into()],
+        )
+        .unwrap()
+        .v()
+        .unwrap();
+    }
+
+    pub fn update_selection(
+        &self,
+        env: &mut JNIEnv<'local>,
+        view: &View<'local>,
+        sel_start: jint,
+        sel_end: jint,
+        candidates_start: jint,
+        candidates_end: jint,
+    ) {
+        env.call_method(
+            &self.0,
+            "updateSelection",
+            "(Landroid/view/View;IIII)V",
+            &[
+                (&view.0).into(),
+                sel_start.into(),
+                sel_end.into(),
+                candidates_start.into(),
+                candidates_end.into(),
+            ],
+        )
+        .unwrap()
+        .v()
+        .unwrap();
+    }
+}
 
 #[repr(transparent)]
 pub struct EditorInfo<'local>(pub JObject<'local>);
 
-// TODO: bind the EditorInfo methods most commonly called by editors
+// TODO: bind the EditorInfo fields and methods most commonly used by editors
 
 #[allow(unused_variables)]
 pub trait InputConnection {

@@ -3,6 +3,8 @@
 pub use jni;
 pub use ndk;
 
+mod binder;
+pub use binder::*;
 mod context;
 pub use context::*;
 mod events;

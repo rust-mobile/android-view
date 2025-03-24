@@ -26,9 +26,11 @@ import android.view.accessibility.AccessibilityNodeInfo.AccessibilityAction;
 import android.view.accessibility.AccessibilityNodeProvider;
 import android.view.inputmethod.EditorInfo;
 import android.view.inputmethod.InputConnection;
+import android.view.inputmethod.InputMethodManager;
 
 public abstract class RustView extends SurfaceView implements SurfaceHolder.Callback, Choreographer.FrameCallback {
     final long mViewPeer;
+    final InputMethodManager mInputMethodManager;
 
     protected abstract long newViewPeer(Context context);
 
@@ -36,6 +38,7 @@ public abstract class RustView extends SurfaceView implements SurfaceHolder.Call
         super(context);
         mViewPeer = newViewPeer(context);
         getHolder().addCallback(this);
+        mInputMethodManager = (InputMethodManager)context.getSystemService(Context.INPUT_METHOD_SERVICE);
     }
 
     private native int[] onMeasureNative(long peer, int widthSpec, int heightSpec);

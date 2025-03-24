@@ -13,7 +13,7 @@ use std::{
     },
 };
 
-use crate::{context::*, events::*, graphics::*, ime::*, surface::*};
+use crate::{binder::*, context::*, events::*, graphics::*, ime::*, surface::*};
 
 #[repr(transparent)]
 pub struct View<'local>(pub JObject<'local>);
@@ -52,6 +52,28 @@ impl<'local> View<'local> {
             .unwrap()
             .z()
             .unwrap()
+    }
+
+    pub fn input_method_manager(&self, env: &mut JNIEnv<'local>) -> InputMethodManager<'local> {
+        InputMethodManager(
+            env.get_field(
+                &self.0,
+                "mInputMethodManager",
+                "Landroid/view/inputmethod/InputMethodManager;",
+            )
+            .unwrap()
+            .l()
+            .unwrap(),
+        )
+    }
+
+    pub fn window_token(&self, env: &mut JNIEnv<'local>) -> IBinder<'local> {
+        IBinder(
+            env.call_method(&self.0, "getWindowToken", "()Landroid/os/IBinder;", &[])
+                .unwrap()
+                .l()
+                .unwrap(),
+        )
     }
 }
 
