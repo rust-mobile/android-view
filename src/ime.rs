@@ -580,3 +580,16 @@ pub(crate) extern "system" fn close_input_connection<'local>(
         ic.close_connection(&mut env, &view);
     })
 }
+
+pub fn caps_mode(env: &mut JNIEnv, text: &str, off: usize, req_modes: jint) -> jint {
+    let text = env.new_string(text).unwrap();
+    env.call_static_method(
+        "android/text/TextUtils",
+        "getCapsMode",
+        "(Ljava/lang/CharSequence;II)I",
+        &[(&text).into(), (off as jint).into(), req_modes.into()],
+    )
+    .unwrap()
+    .i()
+    .unwrap()
+}
