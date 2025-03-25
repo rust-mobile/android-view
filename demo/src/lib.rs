@@ -18,7 +18,6 @@ use android_view::{
 use anyhow::Result;
 use log::LevelFilter;
 use std::ffi::c_void;
-use std::num::NonZeroUsize;
 use std::time::Instant;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 use vello::kurbo;
@@ -59,8 +58,8 @@ fn create_vello_renderer(render_cx: &RenderContext, surface: &RenderSurface<'_>)
         RendererOptions {
             surface_format: Some(surface.format),
             use_cpu: false,
-            antialiasing_support: vello::AaSupport::all(),
-            num_init_threads: NonZeroUsize::new(1),
+            antialiasing_support: vello::AaSupport::area_only(),
+            num_init_threads: None,
         },
     )
     .expect("Couldn't create renderer")
