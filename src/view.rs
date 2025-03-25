@@ -304,7 +304,7 @@ pub trait ViewPeer: Send {
         false
     }
 
-    fn as_input_connection<'a>(&'a mut self) -> &'a mut dyn InputConnection {
+    fn as_input_connection(&mut self) -> &mut dyn InputConnection {
         unimplemented!()
     }
 }
