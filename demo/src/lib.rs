@@ -243,6 +243,21 @@ impl DemoViewPeer {
                 &view_class,
                 &view.0,
             );
+
+            if self.ime_active {
+                let imm = view.input_method_manager(env);
+                let selection = self.editor.editor().selection().text_range();
+                let sel_start = self.editor.utf8_to_utf16_index(selection.start) as jint;
+                let sel_end = self.editor.utf8_to_utf16_index(selection.end) as jint;
+                let (comp_start, comp_end) = if let Some((start, end)) = self.composing_region {
+                    let start = self.editor.utf8_to_utf16_index(start) as jint;
+                    let end = self.editor.utf8_to_utf16_index(end) as jint;
+                    (start, end)
+                } else {
+                    (-1, -1)
+                };
+                imm.update_selection(env, view, sel_start, sel_end, comp_start, comp_end);
+            }
         }
 
         // Render to the surface's texture.
