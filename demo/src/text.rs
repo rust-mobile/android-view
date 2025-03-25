@@ -70,6 +70,32 @@ impl Editor {
         self.editor.text()
     }
 
+    pub fn utf8_to_utf16_index(&self, utf8_index: usize) -> usize {
+        let mut utf16_len_so_far = 0usize;
+        let mut utf8_len_so_far = 0usize;
+        for c in self.editor.text().chars() {
+            if utf8_len_so_far >= utf8_index {
+                break;
+            }
+            utf16_len_so_far += c.len_utf16();
+            utf8_len_so_far += c.len_utf8();
+        }
+        utf16_len_so_far
+    }
+
+    pub fn utf16_to_utf8_index(&self, utf16_index: usize) -> usize {
+        let mut utf16_len_so_far = 0usize;
+        let mut utf8_len_so_far = 0usize;
+        for c in self.editor.text().chars() {
+            if utf16_len_so_far >= utf16_index {
+                break;
+            }
+            utf16_len_so_far += c.len_utf16();
+            utf8_len_so_far += c.len_utf8();
+        }
+        utf8_len_so_far
+    }
+
     pub fn cursor_reset(&mut self) {
         self.start_time = Some(Instant::now());
         // TODO: for real world use, this should be reading from the system settings
