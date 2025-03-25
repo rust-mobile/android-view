@@ -116,27 +116,27 @@ impl<'local> EditorInfo<'local> {
 
 #[allow(unused_variables)]
 pub trait InputConnection {
-    fn text_before_cursor<'local>(
-        &mut self,
+    fn text_before_cursor<'slf, 'local>(
+        &'slf mut self,
         env: &mut JNIEnv<'local>,
         view: &View<'local>,
         n: jint,
-    ) -> Option<String>;
+    ) -> Option<Cow<'slf, str>>;
     // TODO: styled version
 
-    fn text_after_cursor<'local>(
-        &mut self,
+    fn text_after_cursor<'slf, 'local>(
+        &'slf mut self,
         env: &mut JNIEnv<'local>,
         view: &View<'local>,
         n: jint,
-    ) -> Option<String>;
+    ) -> Option<Cow<'slf, str>>;
     // TODO: styled version
 
-    fn selected_text<'local>(
-        &mut self,
+    fn selected_text<'slf, 'local>(
+        &'slf mut self,
         env: &mut JNIEnv<'local>,
         view: &View<'local>,
-    ) -> Option<String>;
+    ) -> Option<Cow<'slf, str>>;
     // TODO: styled version
 
     fn cursor_caps_mode<'local>(
