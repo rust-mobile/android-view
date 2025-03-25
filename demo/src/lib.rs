@@ -164,6 +164,16 @@ struct DemoViewPeer {
 }
 
 impl DemoViewPeer {
+    fn enqueue_render_if_needed<'local>(&mut self, env: &mut JNIEnv<'local>, view: &View<'local>) {
+        if self.render_surface.is_none()
+            || self.last_drawn_generation == self.editor.generation()
+            || self.batch_edit_depth != 0
+        {
+            return;
+        }
+        view.post_frame_callback(env);
+    }
+
     fn schedule_next_blink<'local>(&self, env: &mut JNIEnv<'local>, view: &View<'local>) {
         if let Some(next_time) = self.editor.next_blink_time() {
             let delay = next_time.duration_since(Instant::now());
@@ -271,11 +281,8 @@ impl ViewPeer for DemoViewPeer {
         _direction: jint,
         _previously_focused_rect: Option<&Rect<'local>>,
     ) {
-        if self.render_surface.is_none() {
-            return;
-        }
         self.update_cursor_state(env, view, gain_focus);
-        view.post_frame_callback(env);
+        self.enqueue_render_if_needed(env, view);
     }
 
     fn surface_changed<'local>(
@@ -355,7 +362,7 @@ impl ViewPeer for DemoViewPeer {
     fn delayed_callback<'local>(&mut self, env: &mut JNIEnv<'local>, view: &View<'local>) {
         self.editor.cursor_blink();
         self.last_drawn_generation = Default::default();
-        view.post_frame_callback(env);
+        self.enqueue_render_if_needed(env, view);
         self.schedule_next_blink(env, view);
     }
 
