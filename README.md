@@ -21,7 +21,9 @@ cargo install cargo-ndk
 cargo ndk -t arm64-v8a -o app/src/main/jniLibs/ build -p android-view-demo
 ./gradlew build
 ./gradlew installDebug
-adb shell am start -n org.linebender.viewdemo/.DemoActivity
+adb shell am start -n org.linebender.android.viewdemo/.DemoActivity
+# To view logs:
+adb shell run-as org.linebender.android.viewdemo logcat -v color
 ```
 
 ## Open questions
