@@ -377,7 +377,7 @@ dependencies = [
 [[package]]
 name = "fontique"
 version = "0.3.0"
-source = "git+https://github.com/linebender/parley#eb4b9150d2468479f2991fc8d752d859c0d703ec"
+source = "git+https://github.com/linebender/parley?branch=editor-selection-accessor#8a494825835c4ce009e492966a19aaa782d77006"
 dependencies = [
  "bytemuck",
  "fontconfig-cache-parser",
@@ -923,7 +923,7 @@ dependencies = [
 [[package]]
 name = "parley"
 version = "0.3.0"
-source = "git+https://github.com/linebender/parley#eb4b9150d2468479f2991fc8d752d859c0d703ec"
+source = "git+https://github.com/linebender/parley?branch=editor-selection-accessor#8a494825835c4ce009e492966a19aaa782d77006"
 dependencies = [
  "accesskit",
  "fontique",
