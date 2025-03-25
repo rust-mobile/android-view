@@ -156,6 +156,10 @@ struct DemoViewPeer {
     /// The IME cursor area we last sent to the platform.
     last_sent_ime_cursor_area: kurbo::Rect,
 
+    ime_active: bool,
+    batch_edit_depth: usize,
+    composing_region: Option<(usize, usize)>,
+
     access_adapter: accesskit_android::Adapter,
 }
 
@@ -185,27 +189,6 @@ impl DemoViewPeer {
     }
 
     fn render<'local>(&mut self, env: &mut JNIEnv<'local>, view: &View<'local>) {
-        let view_class = env.get_object_class(&view.0).unwrap();
-        let mut tree_source = EditorAccessTreeSource {
-            render_surface: &self.render_surface,
-            editor: &mut self.editor,
-        };
-        self.access_adapter.update_if_active(
-            || {
-                let mut update = TreeUpdate {
-                    nodes: vec![],
-                    tree: None,
-                    focus: TEXT_INPUT_ID,
-                };
-                let node = tree_source.build_text_input_node(&mut update);
-                update.nodes.push((TEXT_INPUT_ID, node));
-                update
-            },
-            env,
-            &view_class,
-            &view.0,
-        );
-
         // Get the RenderSurface (surface + config).
         let surface = self.render_surface.as_ref().unwrap();
 
@@ -223,12 +206,33 @@ impl DemoViewPeer {
             .expect("failed to get surface texture");
 
         // Sometimes `Scene` is stale and needs to be redrawn.
-        if self.last_drawn_generation != self.editor.generation() {
+        if self.last_drawn_generation != self.editor.generation() && self.batch_edit_depth != 0 {
             // Empty the scene of objects to draw. You could create a new Scene each time, but in this case
             // the same Scene is reused so that the underlying memory allocation can also be reused.
             self.scene.reset();
 
             self.last_drawn_generation = self.editor.draw(&mut self.scene);
+
+            let view_class = env.get_object_class(&view.0).unwrap();
+            let mut tree_source = EditorAccessTreeSource {
+                render_surface: &self.render_surface,
+                editor: &mut self.editor,
+            };
+            self.access_adapter.update_if_active(
+                || {
+                    let mut update = TreeUpdate {
+                        nodes: vec![],
+                        tree: None,
+                        focus: TEXT_INPUT_ID,
+                    };
+                    let node = tree_source.build_text_input_node(&mut update);
+                    update.nodes.push((TEXT_INPUT_ID, node));
+                    update
+                },
+                env,
+                &view_class,
+                &view.0,
+            );
         }
 
         // Render to the surface's texture.
@@ -513,6 +517,9 @@ extern "system" fn new_view_peer<'local>(
         editor: text::Editor::new(text::LOREM),
         last_drawn_generation: Default::default(),
         last_sent_ime_cursor_area: kurbo::Rect::new(f64::NAN, f64::NAN, f64::NAN, f64::NAN),
+        ime_active: false,
+        batch_edit_depth: 0,
+        composing_region: None,
         access_adapter: Default::default(),
     };
     register_view_peer(peer)
