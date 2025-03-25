@@ -188,6 +188,18 @@ pub trait InputConnection {
         view: &View<'local>,
     ) -> bool;
 
+    fn commit_text<'local>(
+        &mut self,
+        env: &mut JNIEnv<'local>,
+        view: &View<'local>,
+        text: &str,
+        new_cursor_position: jint,
+    ) -> bool {
+        self.set_composing_text(env, view, text, new_cursor_position)
+            && self.finish_composing_text(env, view)
+    }
+    // TODO: styled version
+
     // TODO: Do we need to bind commitCompletion or commitCoorrection?
     // Gio's InputConnection just returns false for both.
 
@@ -411,9 +423,7 @@ pub(crate) extern "system" fn commit_text<'local>(
     with_input_connection(peer, |ic| {
         let text = env.get_string(&text).unwrap();
         let text = Cow::from(&text);
-        if ic.set_composing_text(&mut env, &view, &text, new_cursor_position)
-            && ic.finish_composing_text(&mut env, &view)
-        {
+        if ic.commit_text(&mut env, &view, &text, new_cursor_position) {
             JNI_TRUE
         } else {
             JNI_FALSE
