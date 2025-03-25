@@ -20,6 +20,7 @@ use log::LevelFilter;
 use std::ffi::c_void;
 use std::num::NonZeroUsize;
 use std::time::Instant;
+use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 use vello::kurbo;
 use vello::peniko::Color;
 use vello::util::{RenderContext, RenderSurface};
@@ -525,6 +526,13 @@ pub unsafe extern "system" fn JNI_OnLoad(vm: *mut RawJavaVM, _: *mut c_void) -> 
             .with_max_level(LevelFilter::Trace)
             .with_tag("android-view-demo"),
     );
+    // This will try to create a "log" logger, and error because one was already created above
+    // We therefore ignore the error
+    // Ideally, we'd only ignore the SetLoggerError, but the only way that's possible is to inspect
+    // `Debug/Display` on the TryInitError, which is awful.
+    let _ = tracing_subscriber::registry()
+        .with(tracing_android_trace::AndroidTraceLayer::new())
+        .try_init();
 
     let vm = unsafe { JavaVM::from_raw(vm) }.unwrap();
     let mut env = vm.get_env().unwrap();
