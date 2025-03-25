@@ -223,7 +223,9 @@ pub trait InputConnection {
         env: &mut JNIEnv<'local>,
         view: &View<'local>,
         id: jint,
-    ) -> bool;
+    ) -> bool {
+        false
+    }
 
     fn begin_batch_edit<'local>(&mut self, env: &mut JNIEnv<'local>, view: &View<'local>) -> bool;
 
@@ -241,14 +243,18 @@ pub trait InputConnection {
         env: &mut JNIEnv<'local>,
         view: &View<'local>,
         states: jint,
-    ) -> bool;
+    ) -> bool {
+        false
+    }
 
     fn report_fullscreen_mode<'local>(
         &mut self,
         env: &mut JNIEnv<'local>,
         view: &View<'local>,
         enabled: bool,
-    ) -> bool;
+    ) -> bool {
+        false
+    }
 
     // TODO: Do we need to bind performPrivateCommand? Gio's InputConnection
     // just returns false.
