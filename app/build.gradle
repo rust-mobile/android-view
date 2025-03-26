@@ -2,6 +2,8 @@ plugins {
     id 'com.android.application'
 }
 
+group = "org.linebender.android.rustview"
+
 android {
     ndkVersion "25.2.9519653"
     compileSdk 31
