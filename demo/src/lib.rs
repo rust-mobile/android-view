@@ -216,7 +216,7 @@ impl DemoViewPeer {
             .expect("failed to get surface texture");
 
         // Sometimes `Scene` is stale and needs to be redrawn.
-        if self.last_drawn_generation != self.editor.generation() && self.batch_edit_depth != 0 {
+        if self.last_drawn_generation != self.editor.generation() && self.batch_edit_depth == 0 {
             // Empty the scene of objects to draw. You could create a new Scene each time, but in this case
             // the same Scene is reused so that the underlying memory allocation can also be reused.
             self.scene.reset();
