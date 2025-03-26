@@ -4,6 +4,8 @@ use jni::{
     objects::{JClass, JIntArray, JObject},
     sys::{JNI_FALSE, JNI_TRUE, jboolean, jfloat, jint, jlong},
 };
+use ndk::event::Keycode;
+use num_enum::FromPrimitive;
 use std::{
     collections::BTreeMap,
     ffi::c_void,
@@ -117,7 +119,7 @@ pub trait ViewPeer: Send {
         &mut self,
         env: &mut JNIEnv<'local>,
         view: &View<'local>,
-        key_code: jint,
+        key_code: Keycode,
         event: &KeyEvent<'local>,
     ) -> bool {
         false
@@ -127,7 +129,7 @@ pub trait ViewPeer: Send {
         &mut self,
         env: &mut JNIEnv<'local>,
         view: &View<'local>,
-        key_code: jint,
+        key_code: Keycode,
         event: &KeyEvent<'local>,
     ) -> bool {
         false
@@ -398,7 +400,7 @@ extern "system" fn on_key_down<'local>(
     event: KeyEvent<'local>,
 ) -> jboolean {
     with_peer(peer, |peer| {
-        to_jboolean(peer.on_key_down(&mut env, &view, key_code, &event))
+        to_jboolean(peer.on_key_down(&mut env, &view, Keycode::from_primitive(key_code), &event))
     })
 }
 
@@ -410,7 +412,7 @@ extern "system" fn on_key_up<'local>(
     event: KeyEvent<'local>,
 ) -> jboolean {
     with_peer(peer, |peer| {
-        to_jboolean(peer.on_key_up(&mut env, &view, key_code, &event))
+        to_jboolean(peer.on_key_up(&mut env, &view, Keycode::from_primitive(key_code), &event))
     })
 }
 

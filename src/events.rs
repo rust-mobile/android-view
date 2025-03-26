@@ -3,6 +3,10 @@ use jni::{
     objects::JObject,
     sys::{jfloat, jint, jlong},
 };
+use ndk::event::{
+    KeyAction, KeyEventFlags, Keycode, MetaState, MotionAction, MotionEventFlags, Source,
+};
+use num_enum::FromPrimitive;
 
 #[repr(transparent)]
 pub struct KeyEvent<'local>(pub JObject<'local>);
@@ -15,18 +19,22 @@ impl<'local> KeyEvent<'local> {
             .unwrap()
     }
 
-    pub fn source(&self, env: &mut JNIEnv<'local>) -> jint {
-        env.call_method(&self.0, "getSource", "()I", &[])
-            .unwrap()
-            .i()
-            .unwrap()
+    pub fn source(&self, env: &mut JNIEnv<'local>) -> Source {
+        Source::from_primitive(
+            env.call_method(&self.0, "getSource", "()I", &[])
+                .unwrap()
+                .i()
+                .unwrap(),
+        )
     }
 
-    pub fn action(&self, env: &mut JNIEnv<'local>) -> jint {
-        env.call_method(&self.0, "getAction", "()I", &[])
-            .unwrap()
-            .i()
-            .unwrap()
+    pub fn action(&self, env: &mut JNIEnv<'local>) -> KeyAction {
+        KeyAction::from_primitive(
+            env.call_method(&self.0, "getAction", "()I", &[])
+                .unwrap()
+                .i()
+                .unwrap(),
+        )
     }
 
     pub fn event_time(&self, env: &mut JNIEnv<'local>) -> jlong {
@@ -43,25 +51,22 @@ impl<'local> KeyEvent<'local> {
             .unwrap()
     }
 
-    pub fn flags(&self, env: &mut JNIEnv<'local>) -> jint {
-        env.call_method(&self.0, "getFlags", "()I", &[])
-            .unwrap()
-            .i()
-            .unwrap()
+    pub fn flags(&self, env: &mut JNIEnv<'local>) -> KeyEventFlags {
+        KeyEventFlags(
+            env.call_method(&self.0, "getFlags", "()I", &[])
+                .unwrap()
+                .i()
+                .unwrap() as u32,
+        )
     }
 
-    pub fn meta_state(&self, env: &mut JNIEnv<'local>) -> jint {
-        env.call_method(&self.0, "getMetaState", "()I", &[])
-            .unwrap()
-            .i()
-            .unwrap()
-    }
-
-    pub fn modifiers(&self, env: &mut JNIEnv<'local>) -> jint {
-        env.call_method(&self.0, "getModifiers", "()I", &[])
-            .unwrap()
-            .i()
-            .unwrap()
+    pub fn meta_state(&self, env: &mut JNIEnv<'local>) -> MetaState {
+        MetaState(
+            env.call_method(&self.0, "getMetaState", "()I", &[])
+                .unwrap()
+                .i()
+                .unwrap() as u32,
+        )
     }
 
     pub fn repeat_count(&self, env: &mut JNIEnv<'local>) -> jint {
@@ -71,11 +76,13 @@ impl<'local> KeyEvent<'local> {
             .unwrap()
     }
 
-    pub fn key_code(&self, env: &mut JNIEnv<'local>) -> jint {
-        env.call_method(&self.0, "getKeyCode", "()I", &[])
-            .unwrap()
-            .i()
-            .unwrap()
+    pub fn key_code(&self, env: &mut JNIEnv<'local>) -> Keycode {
+        Keycode::from_primitive(
+            env.call_method(&self.0, "getKeyCode", "()I", &[])
+                .unwrap()
+                .i()
+                .unwrap(),
+        )
     }
 
     pub fn scan_code(&self, env: &mut JNIEnv<'local>) -> jint {
@@ -109,11 +116,13 @@ impl<'local> MotionEvent<'local> {
             .unwrap()
     }
 
-    pub fn source(&self, env: &mut JNIEnv<'local>) -> jint {
-        env.call_method(&self.0, "getSource", "()I", &[])
-            .unwrap()
-            .i()
-            .unwrap()
+    pub fn source(&self, env: &mut JNIEnv<'local>) -> Source {
+        Source::from_primitive(
+            env.call_method(&self.0, "getSource", "()I", &[])
+                .unwrap()
+                .i()
+                .unwrap(),
+        )
     }
 
     pub fn action(&self, env: &mut JNIEnv<'local>) -> jint {
@@ -123,11 +132,13 @@ impl<'local> MotionEvent<'local> {
             .unwrap()
     }
 
-    pub fn action_masked(&self, env: &mut JNIEnv<'local>) -> jint {
-        env.call_method(&self.0, "getActionMasked", "()I", &[])
-            .unwrap()
-            .i()
-            .unwrap()
+    pub fn action_masked(&self, env: &mut JNIEnv<'local>) -> MotionAction {
+        MotionAction::from_primitive(
+            env.call_method(&self.0, "getActionMasked", "()I", &[])
+                .unwrap()
+                .i()
+                .unwrap(),
+        )
     }
 
     pub fn action_index(&self, env: &mut JNIEnv<'local>) -> jint {
@@ -151,18 +162,22 @@ impl<'local> MotionEvent<'local> {
             .unwrap()
     }
 
-    pub fn flags(&self, env: &mut JNIEnv<'local>) -> jint {
-        env.call_method(&self.0, "getFlags", "()I", &[])
-            .unwrap()
-            .i()
-            .unwrap()
+    pub fn flags(&self, env: &mut JNIEnv<'local>) -> MotionEventFlags {
+        MotionEventFlags(
+            env.call_method(&self.0, "getFlags", "()I", &[])
+                .unwrap()
+                .i()
+                .unwrap() as u32,
+        )
     }
 
-    pub fn meta_state(&self, env: &mut JNIEnv<'local>) -> jint {
-        env.call_method(&self.0, "getMetaState", "()I", &[])
-            .unwrap()
-            .i()
-            .unwrap()
+    pub fn meta_state(&self, env: &mut JNIEnv<'local>) -> MetaState {
+        MetaState(
+            env.call_method(&self.0, "getMetaState", "()I", &[])
+                .unwrap()
+                .i()
+                .unwrap() as u32,
+        )
     }
 
     pub fn pointer_count(&self, env: &mut JNIEnv<'local>) -> jint {
