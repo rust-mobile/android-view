@@ -2,6 +2,8 @@ plugins {
     id 'com.android.library'
 }
 
+group = "org.linebender.android.rustview"
+
 android {
     compileSdk 31
     defaultConfig {
