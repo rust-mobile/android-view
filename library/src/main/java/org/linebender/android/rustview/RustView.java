@@ -9,7 +9,7 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE.chromium file.
 
-package org.linebender.android;
+package org.linebender.android.rustview;
 
 import android.content.Context;
 import android.graphics.Rect;
