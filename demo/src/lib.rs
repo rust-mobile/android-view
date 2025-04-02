@@ -12,7 +12,7 @@ use android_view::{
         objects::JObject,
         sys::{JNI_VERSION_1_6, JavaVM as RawJavaVM, jfloat, jint, jlong},
     },
-    ndk::native_window::NativeWindow,
+    ndk::{event::Keycode, native_window::NativeWindow},
     *,
 };
 use anyhow::Result;
@@ -287,6 +287,20 @@ impl DemoViewPeer {
 
 impl ViewPeer for DemoViewPeer {
     // TODO
+
+    fn on_key_down<'local>(
+        &mut self,
+        env: &mut JNIEnv<'local>,
+        view: &View<'local>,
+        key_code: Keycode,
+        event: &KeyEvent<'local>,
+    ) -> bool {
+        if !self.editor.on_key_down(env, key_code, event) {
+            return false;
+        }
+        self.enqueue_render_if_needed(env, view);
+        true
+    }
 
     fn on_focus_changed<'local>(
         &mut self,

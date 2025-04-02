@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
 use accesskit::{Node, TreeUpdate};
+use android_view::{KeyEvent, jni::JNIEnv, ndk::event::Keycode};
 use core::default::Default;
 use parley::{GenericFamily, StyleProperty, editor::SplitString, layout::PositionedLayoutItem};
 use std::time::{Duration, Instant};
@@ -126,7 +127,130 @@ impl Editor {
         });
     }
 
-    // TODO: event handling
+    pub fn on_key_down<'local>(
+        &mut self,
+        env: &mut JNIEnv<'local>,
+        key_code: Keycode,
+        event: &KeyEvent<'local>,
+    ) -> bool {
+        self.cursor_reset();
+        let mut drv = self.editor.driver(&mut self.font_cx, &mut self.layout_cx);
+        let meta_state = event.meta_state(env);
+        let shift = meta_state.shift_on();
+        let action_mod = meta_state.ctrl_on();
+
+        match key_code {
+            // TODO: clipboard commands?
+            Keycode::A if action_mod => {
+                if shift {
+                    drv.collapse_selection();
+                } else {
+                    drv.select_all();
+                }
+            }
+            Keycode::DpadLeft => {
+                if action_mod {
+                    if shift {
+                        drv.select_word_left();
+                    } else {
+                        drv.move_word_left();
+                    }
+                } else if shift {
+                    drv.select_left();
+                } else {
+                    drv.move_left();
+                }
+            }
+            Keycode::DpadRight => {
+                if action_mod {
+                    if shift {
+                        drv.select_word_right();
+                    } else {
+                        drv.move_word_right();
+                    }
+                } else if shift {
+                    drv.select_right();
+                } else {
+                    drv.move_right();
+                }
+            }
+            Keycode::DpadUp => {
+                if shift {
+                    drv.select_up();
+                } else {
+                    drv.move_up();
+                }
+            }
+            Keycode::DpadDown => {
+                if shift {
+                    drv.select_down();
+                } else {
+                    drv.move_down();
+                }
+            }
+            Keycode::MoveHome => {
+                if action_mod {
+                    if shift {
+                        drv.select_to_text_start();
+                    } else {
+                        drv.move_to_text_start();
+                    }
+                } else if shift {
+                    drv.select_to_line_start();
+                } else {
+                    drv.move_to_line_start();
+                }
+            }
+            Keycode::MoveEnd => {
+                let this = &mut *self;
+                let mut drv = this.driver();
+
+                if action_mod {
+                    if shift {
+                        drv.select_to_text_end();
+                    } else {
+                        drv.move_to_text_end();
+                    }
+                } else if shift {
+                    drv.select_to_line_end();
+                } else {
+                    drv.move_to_line_end();
+                }
+            }
+            Keycode::ForwardDel => {
+                if action_mod {
+                    drv.delete_word();
+                } else {
+                    drv.delete();
+                }
+            }
+            Keycode::Del => {
+                if action_mod {
+                    drv.backdelete_word();
+                } else {
+                    drv.backdelete();
+                }
+            }
+            Keycode::Enter | Keycode::NumpadEnter => {
+                drv.insert_or_replace_selection("\n");
+            }
+            Keycode::Space => {
+                drv.insert_or_replace_selection(" ");
+            }
+            _ => {
+                if let Some(c) = event.unicode_char(env) {
+                    let mut b = [0u8; 4];
+                    let s = c.encode_utf8(&mut b);
+                    drv.insert_or_replace_selection(s);
+                    return true;
+                }
+                return false;
+            }
+        }
+        true
+    }
+
+    // TODO: motion events
 
     pub fn handle_accesskit_action_request(&mut self, req: &accesskit::ActionRequest) {
         if req.action == accesskit::Action::SetTextSelection {
