@@ -59,11 +59,15 @@ impl Editor {
         }
     }
 
-    fn driver(&mut self) -> PlainEditorDriver<'_, Brush> {
+    pub fn driver(&mut self) -> PlainEditorDriver<'_, Brush> {
         self.editor.driver(&mut self.font_cx, &mut self.layout_cx)
     }
 
-    pub fn editor(&mut self) -> &mut PlainEditor<Brush> {
+    pub fn editor(&self) -> &PlainEditor<Brush> {
+        &self.editor
+    }
+
+    pub fn editor_mut(&mut self) -> &mut PlainEditor<Brush> {
         &mut self.editor
     }
 
@@ -74,7 +78,7 @@ impl Editor {
     pub fn utf8_to_utf16_index(&self, utf8_index: usize) -> usize {
         let mut utf16_len_so_far = 0usize;
         let mut utf8_len_so_far = 0usize;
-        for c in self.editor.text().chars() {
+        for c in self.editor.raw_text().chars() {
             if utf8_len_so_far >= utf8_index {
                 break;
             }
@@ -87,11 +91,37 @@ impl Editor {
     pub fn utf16_to_utf8_index(&self, utf16_index: usize) -> usize {
         let mut utf16_len_so_far = 0usize;
         let mut utf8_len_so_far = 0usize;
-        for c in self.editor.text().chars() {
+        for c in self.editor.raw_text().chars() {
             if utf16_len_so_far >= utf16_index {
                 break;
             }
             utf16_len_so_far += c.len_utf16();
+            utf8_len_so_far += c.len_utf8();
+        }
+        utf8_len_so_far
+    }
+
+    pub fn utf8_to_usv_index(&self, utf8_index: usize) -> usize {
+        let mut usv_len_so_far = 0usize;
+        let mut utf8_len_so_far = 0usize;
+        for c in self.editor.raw_text().chars() {
+            if utf8_len_so_far >= utf8_index {
+                break;
+            }
+            usv_len_so_far += 1;
+            utf8_len_so_far += c.len_utf8();
+        }
+        usv_len_so_far
+    }
+
+    pub fn usv_to_utf8_index(&self, usv_index: usize) -> usize {
+        let mut usv_len_so_far = 0usize;
+        let mut utf8_len_so_far = 0usize;
+        for c in self.editor.raw_text().chars() {
+            if usv_len_so_far >= usv_index {
+                break;
+            }
+            usv_len_so_far += 1;
             utf8_len_so_far += c.len_utf8();
         }
         utf8_len_so_far
@@ -270,7 +300,7 @@ impl Editor {
     /// Returns drawn `Generation`.
     pub fn draw(&mut self, scene: &mut Scene) -> Generation {
         let transform = Affine::translate((INSET as f64, INSET as f64));
-        for rect in self.editor.selection_geometry().iter() {
+        self.editor.selection_geometry_with(|rect, _| {
             scene.fill(
                 Fill::NonZero,
                 transform,
@@ -278,7 +308,7 @@ impl Editor {
                 None,
                 &rect,
             );
-        }
+        });
         if self.cursor_visible {
             if let Some(cursor) = self.editor.cursor_geometry(1.5) {
                 scene.fill(Fill::NonZero, transform, palette::css::WHITE, None, &cursor);

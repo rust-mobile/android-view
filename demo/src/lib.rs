@@ -12,12 +12,17 @@ use android_view::{
         objects::JObject,
         sys::{JNI_VERSION_1_6, JavaVM as RawJavaVM, jfloat, jint, jlong},
     },
-    ndk::{event::Keycode, native_window::NativeWindow},
+    ndk::{
+        event::{KeyAction, Keycode},
+        native_window::NativeWindow,
+    },
     *,
 };
 use anyhow::Result;
 use log::LevelFilter;
+use std::borrow::Cow;
 use std::ffi::c_void;
+use std::num::NonZeroUsize;
 use std::time::Instant;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 use vello::kurbo;
@@ -158,7 +163,6 @@ struct DemoViewPeer {
 
     ime_active: bool,
     batch_edit_depth: usize,
-    composing_region: Option<(usize, usize)>,
 
     access_adapter: accesskit_android::Adapter,
 }
@@ -246,12 +250,13 @@ impl DemoViewPeer {
 
             if self.ime_active {
                 let imm = view.input_method_manager(env);
-                let selection = self.editor.editor().selection().text_range();
+                let selection = self.editor.editor().raw_selection().text_range();
                 let sel_start = self.editor.utf8_to_utf16_index(selection.start) as jint;
                 let sel_end = self.editor.utf8_to_utf16_index(selection.end) as jint;
-                let (comp_start, comp_end) = if let Some((start, end)) = self.composing_region {
-                    let start = self.editor.utf8_to_utf16_index(start) as jint;
-                    let end = self.editor.utf8_to_utf16_index(end) as jint;
+                let (comp_start, comp_end) = if let Some(range) = self.editor.editor().raw_compose()
+                {
+                    let start = self.editor.utf8_to_utf16_index(range.start) as jint;
+                    let end = self.editor.utf8_to_utf16_index(range.end) as jint;
                     (start, end)
                 } else {
                     (-1, -1)
@@ -323,7 +328,7 @@ impl ViewPeer for DemoViewPeer {
         width: jint,
         height: jint,
     ) {
-        let editor = self.editor.editor();
+        let editor = self.editor.editor_mut();
         editor.set_scale(1.0);
         editor.set_width(Some(width as f32 - 2_f32 * text::INSET));
         self.last_drawn_generation = Default::default();
@@ -538,6 +543,306 @@ impl ViewPeer for DemoViewPeer {
             extend_selection,
         )
     }
+
+    fn as_input_connection(&mut self) -> &mut dyn InputConnection {
+        self
+    }
+}
+
+impl InputConnection for DemoViewPeer {
+    fn text_before_cursor<'slf, 'local>(
+        &'slf mut self,
+        _env: &mut JNIEnv<'local>,
+        _view: &View<'local>,
+        n: jint,
+    ) -> Option<Cow<'slf, str>> {
+        if n < 0 {
+            return None;
+        }
+        let n = n as usize;
+        let editor = self.editor.editor();
+        let text = editor.raw_text();
+        let selection = editor.raw_selection().text_range();
+        let range_end = selection.start;
+        let range_end_utf16 = self.editor.utf8_to_utf16_index(range_end);
+        let range_start = if range_end_utf16 <= n {
+            0
+        } else {
+            self.editor.utf16_to_utf8_index(range_end_utf16 - n)
+        };
+        Some(Cow::Borrowed(&text[range_start..range_end]))
+    }
+
+    fn text_after_cursor<'slf, 'local>(
+        &'slf mut self,
+        _env: &mut JNIEnv<'local>,
+        _view: &View<'local>,
+        n: jint,
+    ) -> Option<Cow<'slf, str>> {
+        if n < 0 {
+            return None;
+        }
+        let n = n as usize;
+        let editor = self.editor.editor();
+        let text = editor.raw_text();
+        let selection = editor.raw_selection().text_range();
+        let range_start = selection.end;
+        let range_start_utf16 = self.editor.utf8_to_utf16_index(range_start);
+        let len_utf16 = self.editor.utf8_to_utf16_index(text.len());
+        let range_end = if range_start_utf16 + n >= len_utf16 {
+            text.len()
+        } else {
+            self.editor.utf16_to_utf8_index(range_start_utf16 + n)
+        };
+        Some(Cow::Borrowed(&text[range_start..range_end]))
+    }
+
+    fn selected_text<'slf, 'local>(
+        &'slf mut self,
+        _env: &mut JNIEnv<'local>,
+        _view: &View<'local>,
+    ) -> Option<Cow<'slf, str>> {
+        self.editor.editor().selected_text().map(Cow::Borrowed)
+    }
+
+    fn cursor_caps_mode<'local>(
+        &mut self,
+        env: &mut JNIEnv<'local>,
+        _view: &View<'local>,
+        req_modes: jint,
+    ) -> jint {
+        let editor = self.editor.editor();
+        let text = editor.raw_text();
+        let offset = editor.raw_selection().focus().index();
+        let offset_utf16 = self.editor.utf8_to_utf16_index(offset);
+        caps_mode(env, text, offset_utf16, req_modes)
+    }
+
+    fn delete_surrounding_text<'local>(
+        &mut self,
+        env: &mut JNIEnv<'local>,
+        view: &View<'local>,
+        before_length: jint,
+        after_length: jint,
+    ) -> bool {
+        if before_length > 0 {
+            let sel_range = self.editor.editor().raw_selection().text_range();
+            let sel_start_utf16 = self.editor.utf8_to_utf16_index(sel_range.start);
+            let before_start_utf16 = sel_start_utf16.saturating_sub(before_length as usize);
+            let before_start = self.editor.utf16_to_utf8_index(before_start_utf16);
+            if let Some(len) = NonZeroUsize::new(sel_range.start - before_start) {
+                let mut drv = self.editor.driver();
+                drv.delete_bytes_before_selection(len);
+            }
+        }
+        if after_length > 0 {
+            let sel_range = self.editor.editor().raw_selection().text_range();
+            let sel_end_utf16 = self.editor.utf8_to_utf16_index(sel_range.end);
+            let len_utf16 = self
+                .editor
+                .utf8_to_utf16_index(self.editor.editor().raw_text().len());
+            let after_end_utf16 = sel_end_utf16
+                .saturating_add(after_length as usize)
+                .min(len_utf16);
+            let after_end = self.editor.utf16_to_utf8_index(after_end_utf16);
+            if let Some(len) = NonZeroUsize::new(after_end - sel_range.end) {
+                let mut drv = self.editor.driver();
+                drv.delete_bytes_after_selection(len);
+            }
+        }
+        self.enqueue_render_if_needed(env, view);
+        true
+    }
+
+    fn delete_surrounding_text_in_code_points<'local>(
+        &mut self,
+        env: &mut JNIEnv<'local>,
+        view: &View<'local>,
+        before_length: jint,
+        after_length: jint,
+    ) -> bool {
+        if before_length > 0 {
+            let sel_range = self.editor.editor().raw_selection().text_range();
+            let sel_start_usv = self.editor.utf8_to_usv_index(sel_range.start);
+            let before_start_usv = sel_start_usv.saturating_sub(before_length as usize);
+            let before_start = self.editor.usv_to_utf8_index(before_start_usv);
+            if let Some(len) = NonZeroUsize::new(sel_range.start - before_start) {
+                let mut drv = self.editor.driver();
+                drv.delete_bytes_before_selection(len);
+            }
+        }
+        if after_length > 0 {
+            let sel_range = self.editor.editor().raw_selection().text_range();
+            let sel_end_usv = self.editor.utf8_to_usv_index(sel_range.end);
+            let len_usv = self
+                .editor
+                .utf8_to_usv_index(self.editor.editor().raw_text().len());
+            let after_end_usv = sel_end_usv
+                .saturating_add(after_length as usize)
+                .min(len_usv);
+            let after_end = self.editor.usv_to_utf8_index(after_end_usv);
+            if let Some(len) = NonZeroUsize::new(after_end - sel_range.end) {
+                let mut drv = self.editor.driver();
+                drv.delete_bytes_after_selection(len);
+            }
+        }
+        self.enqueue_render_if_needed(env, view);
+        true
+    }
+
+    fn set_composing_text<'local>(
+        &mut self,
+        env: &mut JNIEnv<'local>,
+        view: &View<'local>,
+        text: &str,
+        new_cursor_position: jint,
+    ) -> bool {
+        let mut drv = self.editor.driver();
+        if text.is_empty() {
+            if drv.editor.is_composing() {
+                drv.clear_compose();
+            } else {
+                drv.delete_selection();
+            }
+        } else {
+            // We always pass a cursor offset of 0 to `PlainEditor::set_compose`
+            // and then set the cursor using our own logic.
+            drv.set_compose(text, Some((0, 0)));
+        }
+        let range = drv
+            .editor
+            .raw_compose()
+            .clone()
+            .unwrap_or_else(|| drv.editor.raw_selection().text_range());
+        drop(drv);
+        let start_utf16 = self.editor.utf8_to_utf16_index(range.start);
+        let end_utf16 = self.editor.utf8_to_utf16_index(range.end);
+        let cursor_pos_utf16 = if new_cursor_position > 0 {
+            let len_utf16 = self
+                .editor
+                .utf8_to_utf16_index(self.editor.editor().raw_text().len());
+            end_utf16
+                .saturating_add((new_cursor_position - 1) as usize)
+                .min(len_utf16)
+        } else {
+            start_utf16.saturating_sub(-new_cursor_position as usize)
+        };
+        let cursor_pos = self.editor.utf16_to_utf8_index(cursor_pos_utf16);
+        let mut drv = self.editor.driver();
+        drv.move_to_byte(cursor_pos);
+        self.enqueue_render_if_needed(env, view);
+        true
+    }
+
+    fn set_composing_region<'local>(
+        &mut self,
+        env: &mut JNIEnv<'local>,
+        view: &View<'local>,
+        start: jint,
+        end: jint,
+    ) -> bool {
+        let start = start.max(0) as usize;
+        let end = end.max(0) as usize;
+        let len_utf16 = self
+            .editor
+            .utf8_to_utf16_index(self.editor.editor().raw_text().len());
+        let start = start.min(len_utf16);
+        let end = end.min(len_utf16);
+        let mut drv = self.editor.driver();
+        if start == end {
+            drv.finish_compose();
+        } else {
+            let (start, end) = (start.min(end), end.max(start));
+            drv.set_compose_byte_range(start, end);
+        }
+        self.enqueue_render_if_needed(env, view);
+        true
+    }
+
+    fn finish_composing_text<'local>(
+        &mut self,
+        env: &mut JNIEnv<'local>,
+        view: &View<'local>,
+    ) -> bool {
+        let mut drv = self.editor.driver();
+        drv.finish_compose();
+        self.enqueue_render_if_needed(env, view);
+        true
+    }
+
+    fn set_selection<'local>(
+        &mut self,
+        env: &mut JNIEnv<'local>,
+        view: &View<'local>,
+        start: jint,
+        end: jint,
+    ) -> bool {
+        if start < 0 || end < 0 {
+            return false;
+        }
+        let start = self.editor.utf16_to_utf8_index(start as _);
+        let end = self.editor.utf16_to_utf8_index(end as _);
+        let mut drv = self.editor.driver();
+        drv.select_byte_range(start, end);
+        self.enqueue_render_if_needed(env, view);
+        true
+    }
+
+    fn perform_editor_action<'local>(
+        &mut self,
+        _env: &mut JNIEnv<'local>,
+        _view: &View<'local>,
+        _editor_action: jint,
+    ) -> bool {
+        // TODO: Do we need to implement this at all for this demo?
+        // It would surely be needed for a proper framework implementation.
+        false
+    }
+
+    fn begin_batch_edit<'local>(
+        &mut self,
+        _env: &mut JNIEnv<'local>,
+        _view: &View<'local>,
+    ) -> bool {
+        self.batch_edit_depth += 1;
+        true
+    }
+
+    fn end_batch_edit<'local>(&mut self, env: &mut JNIEnv<'local>, view: &View<'local>) -> bool {
+        if self.batch_edit_depth == 0 {
+            return false;
+        }
+        self.batch_edit_depth -= 1;
+        if self.batch_edit_depth == 0 {
+            self.enqueue_render_if_needed(env, view);
+            false
+        } else {
+            true
+        }
+    }
+
+    fn send_key_event<'local>(
+        &mut self,
+        env: &mut JNIEnv<'local>,
+        view: &View<'local>,
+        event: &KeyEvent<'local>,
+    ) -> bool {
+        if event.action(env) != KeyAction::Down {
+            return false;
+        }
+        let key_code = event.key_code(env);
+        self.on_key_down(env, view, key_code, event)
+    }
+
+    fn request_cursor_updates<'local>(
+        &mut self,
+        _env: &mut JNIEnv<'local>,
+        _view: &View<'local>,
+        _cursor_update_mode: jint,
+    ) -> bool {
+        // TODO: Do we need to implement this?
+        false
+    }
 }
 
 extern "system" fn new_view_peer<'local>(
@@ -555,7 +860,6 @@ extern "system" fn new_view_peer<'local>(
         last_sent_ime_cursor_area: kurbo::Rect::new(f64::NAN, f64::NAN, f64::NAN, f64::NAN),
         ime_active: false,
         batch_edit_depth: 0,
-        composing_region: None,
         access_adapter: Default::default(),
     };
     register_view_peer(peer)
