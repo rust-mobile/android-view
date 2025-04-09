@@ -7,6 +7,55 @@ use std::borrow::Cow;
 
 use crate::{binder::*, events::KeyEvent, view::*};
 
+pub const INPUT_TYPE_MASK_CLASS: u32 = 0x0000000f;
+pub const INPUT_TYPE_MASK_VARIATION: u32 = 0x00000ff0;
+pub const INPUT_TYPE_MASK_FLAGS: u32 = 0x00fff000;
+pub const INPUT_TYPE_NULL: u32 = 0x00000000;
+pub const INPUT_TYPE_CLASS_TEXT: u32 = 0x00000001;
+pub const INPUT_TYPE_TEXT_FLAG_CAP_CHARACTERS: u32 = 0x00001000;
+pub const INPUT_TYPE_TEXT_FLAG_CAP_WORDS: u32 = 0x00002000;
+pub const INPUT_TYPE_TEXT_FLAG_CAP_SENTENCES: u32 = 0x00004000;
+pub const INPUT_TYPE_TEXT_FLAG_AUTO_CORRECT: u32 = 0x00008000;
+pub const INPUT_TYPE_TEXT_FLAG_AUTO_COMPLETE: u32 = 0x00010000;
+pub const INPUT_TYPE_TEXT_FLAG_MULTI_LINE: u32 = 0x00020000;
+pub const INPUT_TYPE_TEXT_FLAG_IME_MULTI_LINE: u32 = 0x00040000;
+pub const INPUT_TYPE_TEXT_FLAG_NO_SUGGESTIONS: u32 = 0x00080000;
+pub const INPUT_TYPE_TEXT_FLAG_ENABLE_TEXT_CONVERSION_SUGGESTIONS: u32 = 0x00100000;
+pub const INPUT_TYPE_TEXT_VARIATION_NORMAL: u32 = 0x00000000;
+pub const INPUT_TYPE_TEXT_VARIATION_URI: u32 = 0x00000010;
+pub const INPUT_TYPE_TEXT_VARIATION_EMAIL_ADDRESS: u32 = 0x00000020;
+pub const INPUT_TYPE_TEXT_VARIATION_EMAIL_SUBJECT: u32 = 0x00000030;
+pub const INPUT_TYPE_TEXT_VARIATION_SHORT_MESSAGE: u32 = 0x00000040;
+pub const INPUT_TYPE_TEXT_VARIATION_LONG_MESSAGE: u32 = 0x00000050;
+pub const INPUT_TYPE_TEXT_VARIATION_PERSON_NAME: u32 = 0x00000060;
+pub const INPUT_TYPE_TEXT_VARIATION_POSTAL_ADDRESS: u32 = 0x00000070;
+pub const INPUT_TYPE_TEXT_VARIATION_PASSWORD: u32 = 0x00000080;
+pub const INPUT_TYPE_TEXT_VARIATION_VISIBLE_PASSWORD: u32 = 0x00000090;
+pub const INPUT_TYPE_TEXT_VARIATION_WEB_EDIT_TEXT: u32 = 0x000000a0;
+pub const INPUT_TYPE_TEXT_VARIATION_FILTER: u32 = 0x000000b0;
+pub const INPUT_TYPE_TEXT_VARIATION_PHONETIC: u32 = 0x000000c0;
+pub const INPUT_TYPE_TEXT_VARIATION_WEB_EMAIL_ADDRESS: u32 = 0x000000d0;
+pub const INPUT_TYPE_TEXT_VARIATION_WEB_PASSWORD: u32 = 0x000000e0;
+pub const INPUT_TYPE_CLASS_NUMBER: u32 = 0x00000002;
+pub const INPUT_TYPE_NUMBER_FLAG_SIGNED: u32 = 0x00001000;
+pub const INPUT_TYPE_NUMBER_FLAG_DECIMAL: u32 = 0x00002000;
+pub const INPUT_TYPE_NUMBER_VARIATION_NORMAL: u32 = 0x00000000;
+pub const INPUT_TYPE_NUMBER_VARIATION_PASSWORD: u32 = 0x00000010;
+pub const INPUT_TYPE_CLASS_PHONE: u32 = 0x00000003;
+pub const INPUT_TYPE_CLASS_DATETIME: u32 = 0x00000004;
+pub const INPUT_TYPE_DATETIME_VARIATION_NORMAL: u32 = 0x00000000;
+pub const INPUT_TYPE_DATETIME_VARIATION_DATE: u32 = 0x00000010;
+pub const INPUT_TYPE_DATETIME_VARIATION_TIME: u32 = 0x00000020;
+
+pub const IME_FLAG_NO_PERSONALIZED_LEARNING: u32 = 0x1000000;
+pub const IME_FLAG_NO_FULLSCREEN: u32 = 0x2000000;
+pub const IME_FLAG_NAVIGATE_PREVIOUS: u32 = 0x4000000;
+pub const IME_FLAG_NAVIGATE_NEXT: u32 = 0x8000000;
+pub const IME_FLAG_NO_EXTRACT_UI: u32 = 0x10000000;
+pub const IME_FLAG_NO_ACCESSORY_ACTION: u32 = 0x20000000;
+pub const IME_FLAG_NO_ENTER_ACTION: u32 = 0x40000000;
+pub const IME_FLAG_FORCE_ASCII: u32 = 0x80000000;
+
 #[repr(transparent)]
 pub struct InputMethodManager<'local>(pub JObject<'local>);
 
@@ -88,13 +137,13 @@ impl<'local> InputMethodManager<'local> {
 pub struct EditorInfo<'local>(pub JObject<'local>);
 
 impl<'local> EditorInfo<'local> {
-    pub fn set_input_type(&self, env: &mut JNIEnv<'local>, value: jint) {
-        env.set_field(&self.0, "inputType", "I", value.into())
+    pub fn set_input_type(&self, env: &mut JNIEnv<'local>, value: u32) {
+        env.set_field(&self.0, "inputType", "I", (value as jint).into())
             .unwrap();
     }
 
-    pub fn set_ime_options(&self, env: &mut JNIEnv<'local>, value: jint) {
-        env.set_field(&self.0, "imeOptions", "I", value.into())
+    pub fn set_ime_options(&self, env: &mut JNIEnv<'local>, value: u32) {
+        env.set_field(&self.0, "imeOptions", "I", (value as jint).into())
             .unwrap();
     }
 
