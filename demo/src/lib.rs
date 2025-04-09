@@ -288,6 +288,42 @@ impl DemoViewPeer {
 
         device_handle.device.poll(wgpu::Maintain::Poll);
     }
+
+    fn set_composing_text_internal(&mut self, text: &str, new_cursor_position: jint) {
+        let mut drv = self.editor.driver();
+        if text.is_empty() {
+            if drv.editor.is_composing() {
+                drv.clear_compose();
+            } else {
+                drv.delete_selection();
+            }
+        } else {
+            // We always pass a cursor offset of 0 to `PlainEditor::set_compose`
+            // and then set the cursor using our own logic.
+            drv.set_compose(text, Some((0, 0)));
+        }
+        let range = drv
+            .editor
+            .raw_compose()
+            .clone()
+            .unwrap_or_else(|| drv.editor.raw_selection().text_range());
+        drop(drv);
+        let start_utf16 = self.editor.utf8_to_utf16_index(range.start);
+        let end_utf16 = self.editor.utf8_to_utf16_index(range.end);
+        let cursor_pos_utf16 = if new_cursor_position > 0 {
+            let len_utf16 = self
+                .editor
+                .utf8_to_utf16_index(self.editor.editor().raw_text().len());
+            end_utf16
+                .saturating_add((new_cursor_position - 1) as usize)
+                .min(len_utf16)
+        } else {
+            start_utf16.saturating_sub(-new_cursor_position as usize)
+        };
+        let cursor_pos = self.editor.utf16_to_utf8_index(cursor_pos_utf16);
+        let mut drv = self.editor.driver();
+        drv.move_to_byte(cursor_pos);
+    }
 }
 
 impl ViewPeer for DemoViewPeer {
@@ -299,12 +335,12 @@ impl ViewPeer for DemoViewPeer {
         view: &View<'local>,
         key_code: Keycode,
         event: &KeyEvent<'local>,
-    ) -> bool {
+    ) -> PeerResult<'local, bool> {
         if !self.editor.on_key_down(env, key_code, event) {
-            return false;
+            return false.into();
         }
         self.enqueue_render_if_needed(env, view);
-        true
+        true.into()
     }
 
     fn on_focus_changed<'local>(
@@ -314,9 +350,29 @@ impl ViewPeer for DemoViewPeer {
         gain_focus: bool,
         _direction: jint,
         _previously_focused_rect: Option<&Rect<'local>>,
-    ) {
+    ) -> PeerResult<'local, ()> {
         self.update_cursor_state(env, view, gain_focus);
         self.enqueue_render_if_needed(env, view);
+        ().into()
+    }
+
+    fn on_window_focus_changed<'local>(
+        &mut self,
+        _env: &mut JNIEnv<'local>,
+        _view: &View<'local>,
+        has_window_focus: bool,
+    ) -> PeerResult<'local, ()> {
+        fn show_soft_input<'local>(env: &mut JNIEnv<'local>, view: &View<'local>) {
+            log::info!("trying to show the soft keyboard");
+            let imm = view.input_method_manager(env);
+            imm.show_soft_input(env, view, 0);
+        }
+        if has_window_focus {
+            log::info!("window is focused");
+            PeerResult::with_deferred_fn((), show_soft_input)
+        } else {
+            ().into()
+        }
     }
 
     fn surface_changed<'local>(
@@ -327,7 +383,7 @@ impl ViewPeer for DemoViewPeer {
         _format: jint,
         width: jint,
         height: jint,
-    ) {
+    ) -> PeerResult<'local, ()> {
         let editor = self.editor.editor_mut();
         editor.set_scale(1.0);
         editor.set_width(Some(width as f32 - 2_f32 * text::INSET));
@@ -371,6 +427,7 @@ impl ViewPeer for DemoViewPeer {
         self.render_surface = Some(surface);
 
         self.render(env, view);
+        ().into()
     }
 
     fn surface_destroyed<'local>(
@@ -378,10 +435,11 @@ impl ViewPeer for DemoViewPeer {
         env: &mut JNIEnv<'local>,
         view: &View<'local>,
         _holder: &SurfaceHolder<'local>,
-    ) {
+    ) -> PeerResult<'local, ()> {
         self.render_surface = None;
         view.remove_frame_callback(env);
         view.remove_delayed_callbacks(env);
+        ().into()
     }
 
     fn do_frame<'local>(
@@ -389,15 +447,21 @@ impl ViewPeer for DemoViewPeer {
         env: &mut JNIEnv<'local>,
         view: &View<'local>,
         _frame_time_nanos: jlong,
-    ) {
-        self.render(env, view)
+    ) -> PeerResult<'local, ()> {
+        self.render(env, view);
+        ().into()
     }
 
-    fn delayed_callback<'local>(&mut self, env: &mut JNIEnv<'local>, view: &View<'local>) {
+    fn delayed_callback<'local>(
+        &mut self,
+        env: &mut JNIEnv<'local>,
+        view: &View<'local>,
+    ) -> PeerResult<'local, ()> {
         self.editor.cursor_blink();
         self.last_drawn_generation = Default::default();
         self.enqueue_render_if_needed(env, view);
         self.schedule_next_blink(env, view);
+        ().into()
     }
 
     fn populate_accessibility_node_info<'local>(
@@ -408,7 +472,7 @@ impl ViewPeer for DemoViewPeer {
         host_screen_y: jint,
         virtual_view_id: jint,
         node_info: &JObject<'local>,
-    ) -> bool {
+    ) -> PeerResult<'local, bool> {
         let mut tree_source = EditorAccessTreeSource {
             render_surface: &self.render_surface,
             editor: &mut self.editor,
@@ -424,15 +488,21 @@ impl ViewPeer for DemoViewPeer {
                 node_info,
             )
             .unwrap()
+            .into()
     }
 
-    fn input_focus<'local>(&mut self, env: &mut JNIEnv<'local>, view: &View<'local>) -> jint {
+    fn input_focus<'local>(
+        &mut self,
+        env: &mut JNIEnv<'local>,
+        view: &View<'local>,
+    ) -> PeerResult<'local, jint> {
         let mut tree_source = EditorAccessTreeSource {
             render_surface: &self.render_surface,
             editor: &mut self.editor,
         };
         self.access_adapter
             .input_focus(&mut tree_source, env, &view.0)
+            .into()
     }
 
     fn virtual_view_at_point<'local>(
@@ -441,13 +511,14 @@ impl ViewPeer for DemoViewPeer {
         view: &View<'local>,
         x: jfloat,
         y: jfloat,
-    ) -> jint {
+    ) -> PeerResult<'local, jint> {
         let mut tree_source = EditorAccessTreeSource {
             render_surface: &self.render_surface,
             editor: &mut self.editor,
         };
         self.access_adapter
             .virtual_view_at_point(&mut tree_source, env, &view.0, x, y)
+            .into()
     }
 
     fn perform_accessibility_action<'local>(
@@ -456,19 +527,15 @@ impl ViewPeer for DemoViewPeer {
         view: &View<'local>,
         virtual_view_id: jint,
         action: jint,
-    ) -> bool {
+    ) -> PeerResult<'local, bool> {
         let mut action_handler = EditorAccessActionHandler {
             render_surface: &self.render_surface,
             editor: &mut self.editor,
             last_drawn_generation: &self.last_drawn_generation,
         };
-        self.access_adapter.perform_action(
-            &mut action_handler,
-            env,
-            &view.0,
-            virtual_view_id,
-            action,
-        )
+        self.access_adapter
+            .perform_action(&mut action_handler, env, &view.0, virtual_view_id, action)
+            .into()
     }
 
     fn accessibility_set_text_selection<'local>(
@@ -478,22 +545,24 @@ impl ViewPeer for DemoViewPeer {
         virtual_view_id: jint,
         anchor: jint,
         focus: jint,
-    ) -> bool {
+    ) -> PeerResult<'local, bool> {
         let mut action_handler = EditorAccessActionHandler {
             render_surface: &self.render_surface,
             editor: &mut self.editor,
             last_drawn_generation: &self.last_drawn_generation,
         };
         let view_class = env.get_object_class(&view.0).unwrap();
-        self.access_adapter.set_text_selection(
-            &mut action_handler,
-            env,
-            &view_class,
-            &view.0,
-            virtual_view_id,
-            anchor,
-            focus,
-        )
+        self.access_adapter
+            .set_text_selection(
+                &mut action_handler,
+                env,
+                &view_class,
+                &view.0,
+                virtual_view_id,
+                anchor,
+                focus,
+            )
+            .into()
     }
 
     fn accessibility_collapse_text_selection<'local>(
@@ -501,20 +570,22 @@ impl ViewPeer for DemoViewPeer {
         env: &mut JNIEnv<'local>,
         view: &View<'local>,
         virtual_view_id: jint,
-    ) -> bool {
+    ) -> PeerResult<'local, bool> {
         let mut action_handler = EditorAccessActionHandler {
             render_surface: &self.render_surface,
             editor: &mut self.editor,
             last_drawn_generation: &self.last_drawn_generation,
         };
         let view_class = env.get_object_class(&view.0).unwrap();
-        self.access_adapter.collapse_text_selection(
-            &mut action_handler,
-            env,
-            &view_class,
-            &view.0,
-            virtual_view_id,
-        )
+        self.access_adapter
+            .collapse_text_selection(
+                &mut action_handler,
+                env,
+                &view_class,
+                &view.0,
+                virtual_view_id,
+            )
+            .into()
     }
 
     fn accessibility_traverse_text<'local>(
@@ -525,23 +596,25 @@ impl ViewPeer for DemoViewPeer {
         granularity: jint,
         forward: bool,
         extend_selection: bool,
-    ) -> bool {
+    ) -> PeerResult<'local, bool> {
         let mut action_handler = EditorAccessActionHandler {
             render_surface: &self.render_surface,
             editor: &mut self.editor,
             last_drawn_generation: &self.last_drawn_generation,
         };
         let view_class = env.get_object_class(&view.0).unwrap();
-        self.access_adapter.traverse_text(
-            &mut action_handler,
-            env,
-            &view_class,
-            &view.0,
-            virtual_view_id,
-            granularity,
-            forward,
-            extend_selection,
-        )
+        self.access_adapter
+            .traverse_text(
+                &mut action_handler,
+                env,
+                &view_class,
+                &view.0,
+                virtual_view_id,
+                granularity,
+                forward,
+                extend_selection,
+            )
+            .into()
     }
 
     fn on_create_input_connection<'local>(
@@ -549,7 +622,7 @@ impl ViewPeer for DemoViewPeer {
         env: &mut JNIEnv<'local>,
         view: &View<'local>,
         out_attrs: &EditorInfo<'local>,
-    ) -> bool {
+    ) -> PeerResult<'local, bool> {
         out_attrs.set_input_type(
             env,
             INPUT_TYPE_CLASS_TEXT
@@ -571,7 +644,7 @@ impl ViewPeer for DemoViewPeer {
         out_attrs.set_initial_caps_mode(env, initial_caps_mode);
         self.editor.driver().clear_compose();
         self.enqueue_render_if_needed(env, view);
-        true
+        true.into()
     }
 
     fn as_input_connection(&mut self) -> &mut dyn InputConnection {
@@ -585,9 +658,9 @@ impl InputConnection for DemoViewPeer {
         _env: &mut JNIEnv<'local>,
         _view: &View<'local>,
         n: jint,
-    ) -> Option<Cow<'slf, str>> {
+    ) -> PeerResult<'local, Option<Cow<'slf, str>>> {
         if n < 0 {
-            return None;
+            return None.into();
         }
         let n = n as usize;
         let editor = self.editor.editor();
@@ -600,7 +673,7 @@ impl InputConnection for DemoViewPeer {
         } else {
             self.editor.utf16_to_utf8_index(range_end_utf16 - n)
         };
-        Some(Cow::Borrowed(&text[range_start..range_end]))
+        Some(Cow::Borrowed(&text[range_start..range_end])).into()
     }
 
     fn text_after_cursor<'slf, 'local>(
@@ -608,9 +681,9 @@ impl InputConnection for DemoViewPeer {
         _env: &mut JNIEnv<'local>,
         _view: &View<'local>,
         n: jint,
-    ) -> Option<Cow<'slf, str>> {
+    ) -> PeerResult<'local, Option<Cow<'slf, str>>> {
         if n < 0 {
-            return None;
+            return None.into();
         }
         let n = n as usize;
         let editor = self.editor.editor();
@@ -624,15 +697,19 @@ impl InputConnection for DemoViewPeer {
         } else {
             self.editor.utf16_to_utf8_index(range_start_utf16 + n)
         };
-        Some(Cow::Borrowed(&text[range_start..range_end]))
+        Some(Cow::Borrowed(&text[range_start..range_end])).into()
     }
 
     fn selected_text<'slf, 'local>(
         &'slf mut self,
         _env: &mut JNIEnv<'local>,
         _view: &View<'local>,
-    ) -> Option<Cow<'slf, str>> {
-        self.editor.editor().selected_text().map(Cow::Borrowed)
+    ) -> PeerResult<'local, Option<Cow<'slf, str>>> {
+        self.editor
+            .editor()
+            .selected_text()
+            .map(Cow::Borrowed)
+            .into()
     }
 
     fn cursor_caps_mode<'local>(
@@ -640,12 +717,12 @@ impl InputConnection for DemoViewPeer {
         env: &mut JNIEnv<'local>,
         _view: &View<'local>,
         req_modes: u32,
-    ) -> u32 {
+    ) -> PeerResult<'local, u32> {
         let editor = self.editor.editor();
         let text = editor.raw_text();
         let offset = editor.raw_selection().focus().index();
         let offset_utf16 = self.editor.utf8_to_utf16_index(offset);
-        caps_mode(env, text, offset_utf16, req_modes)
+        caps_mode(env, text, offset_utf16, req_modes).into()
     }
 
     fn delete_surrounding_text<'local>(
@@ -654,7 +731,7 @@ impl InputConnection for DemoViewPeer {
         view: &View<'local>,
         before_length: jint,
         after_length: jint,
-    ) -> bool {
+    ) -> PeerResult<'local, bool> {
         if before_length > 0 {
             let sel_range = self.editor.editor().raw_selection().text_range();
             let sel_start_utf16 = self.editor.utf8_to_utf16_index(sel_range.start);
@@ -681,7 +758,7 @@ impl InputConnection for DemoViewPeer {
             }
         }
         self.enqueue_render_if_needed(env, view);
-        true
+        true.into()
     }
 
     fn delete_surrounding_text_in_code_points<'local>(
@@ -690,7 +767,7 @@ impl InputConnection for DemoViewPeer {
         view: &View<'local>,
         before_length: jint,
         after_length: jint,
-    ) -> bool {
+    ) -> PeerResult<'local, bool> {
         if before_length > 0 {
             let sel_range = self.editor.editor().raw_selection().text_range();
             let sel_start_usv = self.editor.utf8_to_usv_index(sel_range.start);
@@ -717,7 +794,7 @@ impl InputConnection for DemoViewPeer {
             }
         }
         self.enqueue_render_if_needed(env, view);
-        true
+        true.into()
     }
 
     fn set_composing_text<'local>(
@@ -726,42 +803,10 @@ impl InputConnection for DemoViewPeer {
         view: &View<'local>,
         text: &str,
         new_cursor_position: jint,
-    ) -> bool {
-        let mut drv = self.editor.driver();
-        if text.is_empty() {
-            if drv.editor.is_composing() {
-                drv.clear_compose();
-            } else {
-                drv.delete_selection();
-            }
-        } else {
-            // We always pass a cursor offset of 0 to `PlainEditor::set_compose`
-            // and then set the cursor using our own logic.
-            drv.set_compose(text, Some((0, 0)));
-        }
-        let range = drv
-            .editor
-            .raw_compose()
-            .clone()
-            .unwrap_or_else(|| drv.editor.raw_selection().text_range());
-        drop(drv);
-        let start_utf16 = self.editor.utf8_to_utf16_index(range.start);
-        let end_utf16 = self.editor.utf8_to_utf16_index(range.end);
-        let cursor_pos_utf16 = if new_cursor_position > 0 {
-            let len_utf16 = self
-                .editor
-                .utf8_to_utf16_index(self.editor.editor().raw_text().len());
-            end_utf16
-                .saturating_add((new_cursor_position - 1) as usize)
-                .min(len_utf16)
-        } else {
-            start_utf16.saturating_sub(-new_cursor_position as usize)
-        };
-        let cursor_pos = self.editor.utf16_to_utf8_index(cursor_pos_utf16);
-        let mut drv = self.editor.driver();
-        drv.move_to_byte(cursor_pos);
+    ) -> PeerResult<'local, bool> {
+        self.set_composing_text_internal(text, new_cursor_position);
         self.enqueue_render_if_needed(env, view);
-        true
+        true.into()
     }
 
     fn set_composing_region<'local>(
@@ -770,7 +815,7 @@ impl InputConnection for DemoViewPeer {
         view: &View<'local>,
         start: jint,
         end: jint,
-    ) -> bool {
+    ) -> PeerResult<'local, bool> {
         let start = start.max(0) as usize;
         let end = end.max(0) as usize;
         let len_utf16 = self
@@ -786,18 +831,29 @@ impl InputConnection for DemoViewPeer {
             drv.set_compose_byte_range(start, end);
         }
         self.enqueue_render_if_needed(env, view);
-        true
+        true.into()
     }
 
     fn finish_composing_text<'local>(
         &mut self,
         env: &mut JNIEnv<'local>,
         view: &View<'local>,
-    ) -> bool {
+    ) -> PeerResult<'local, bool> {
         let mut drv = self.editor.driver();
         drv.finish_compose();
         self.enqueue_render_if_needed(env, view);
-        true
+        true.into()
+    }
+
+    fn commit_text<'local>(
+        &mut self,
+        env: &mut JNIEnv<'local>,
+        view: &View<'local>,
+        text: &str,
+        new_cursor_position: jint,
+    ) -> PeerResult<'local, bool> {
+        self.set_composing_text_internal(text, new_cursor_position);
+        self.finish_composing_text(env, view)
     }
 
     fn set_selection<'local>(
@@ -806,16 +862,16 @@ impl InputConnection for DemoViewPeer {
         view: &View<'local>,
         start: jint,
         end: jint,
-    ) -> bool {
+    ) -> PeerResult<'local, bool> {
         if start < 0 || end < 0 {
-            return false;
+            return false.into();
         }
         let start = self.editor.utf16_to_utf8_index(start as _);
         let end = self.editor.utf16_to_utf8_index(end as _);
         let mut drv = self.editor.driver();
         drv.select_byte_range(start, end);
         self.enqueue_render_if_needed(env, view);
-        true
+        true.into()
     }
 
     fn perform_editor_action<'local>(
@@ -823,31 +879,35 @@ impl InputConnection for DemoViewPeer {
         _env: &mut JNIEnv<'local>,
         _view: &View<'local>,
         _editor_action: jint,
-    ) -> bool {
+    ) -> PeerResult<'local, bool> {
         // TODO: Do we need to implement this at all for this demo?
         // It would surely be needed for a proper framework implementation.
-        false
+        false.into()
     }
 
     fn begin_batch_edit<'local>(
         &mut self,
         _env: &mut JNIEnv<'local>,
         _view: &View<'local>,
-    ) -> bool {
+    ) -> PeerResult<'local, bool> {
         self.batch_edit_depth += 1;
-        true
+        true.into()
     }
 
-    fn end_batch_edit<'local>(&mut self, env: &mut JNIEnv<'local>, view: &View<'local>) -> bool {
+    fn end_batch_edit<'local>(
+        &mut self,
+        env: &mut JNIEnv<'local>,
+        view: &View<'local>,
+    ) -> PeerResult<'local, bool> {
         if self.batch_edit_depth == 0 {
-            return false;
+            return false.into();
         }
         self.batch_edit_depth -= 1;
         if self.batch_edit_depth == 0 {
             self.enqueue_render_if_needed(env, view);
-            false
+            false.into()
         } else {
-            true
+            true.into()
         }
     }
 
@@ -856,9 +916,9 @@ impl InputConnection for DemoViewPeer {
         env: &mut JNIEnv<'local>,
         view: &View<'local>,
         event: &KeyEvent<'local>,
-    ) -> bool {
+    ) -> PeerResult<'local, bool> {
         if event.action(env) != KeyAction::Down {
-            return false;
+            return false.into();
         }
         let key_code = event.key_code(env);
         self.on_key_down(env, view, key_code, event)
@@ -869,9 +929,9 @@ impl InputConnection for DemoViewPeer {
         _env: &mut JNIEnv<'local>,
         _view: &View<'local>,
         _cursor_update_mode: jint,
-    ) -> bool {
+    ) -> PeerResult<'local, bool> {
         // TODO: Do we need to implement this?
-        false
+        false.into()
     }
 }
 
