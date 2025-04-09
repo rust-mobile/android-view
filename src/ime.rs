@@ -56,6 +56,10 @@ pub const IME_FLAG_NO_ACCESSORY_ACTION: u32 = 0x20000000;
 pub const IME_FLAG_NO_ENTER_ACTION: u32 = 0x40000000;
 pub const IME_FLAG_FORCE_ASCII: u32 = 0x80000000;
 
+pub const CAP_MODE_CHARACTERS: u32 = INPUT_TYPE_TEXT_FLAG_CAP_CHARACTERS;
+pub const CAP_MODE_WORDS: u32 = INPUT_TYPE_TEXT_FLAG_CAP_WORDS;
+pub const CAP_MODE_SENTENCES: u32 = INPUT_TYPE_TEXT_FLAG_CAP_SENTENCES;
+
 #[repr(transparent)]
 pub struct InputMethodManager<'local>(pub JObject<'local>);
 
@@ -157,8 +161,8 @@ impl<'local> EditorInfo<'local> {
             .unwrap();
     }
 
-    pub fn set_initial_caps_mode(&self, env: &mut JNIEnv<'local>, value: jint) {
-        env.set_field(&self.0, "initialCapsMode", "I", value.into())
+    pub fn set_initial_caps_mode(&self, env: &mut JNIEnv<'local>, value: u32) {
+        env.set_field(&self.0, "initialCapsMode", "I", (value as jint).into())
             .unwrap();
     }
 }
@@ -192,8 +196,8 @@ pub trait InputConnection {
         &mut self,
         env: &mut JNIEnv<'local>,
         view: &View<'local>,
-        req_modes: jint,
-    ) -> jint;
+        req_modes: u32,
+    ) -> u32;
 
     // TODO: Do we need to bind getExtractedText? Gio's InputConnection
     // just returns null.
@@ -385,7 +389,9 @@ pub(crate) extern "system" fn get_cursor_caps_mode<'local>(
     peer: jlong,
     req_modes: jint,
 ) -> jint {
-    with_input_connection(peer, |ic| ic.cursor_caps_mode(&mut env, &view, req_modes))
+    with_input_connection(peer, |ic| {
+        ic.cursor_caps_mode(&mut env, &view, req_modes as u32) as jint
+    })
 }
 
 pub(crate) extern "system" fn delete_surrounding_text<'local>(
@@ -630,15 +636,19 @@ pub(crate) extern "system" fn close_input_connection<'local>(
     })
 }
 
-pub fn caps_mode(env: &mut JNIEnv, text: &str, off: usize, req_modes: jint) -> jint {
+pub fn caps_mode(env: &mut JNIEnv, text: &str, off: usize, req_modes: u32) -> u32 {
     let text = env.new_string(text).unwrap();
     env.call_static_method(
         "android/text/TextUtils",
         "getCapsMode",
         "(Ljava/lang/CharSequence;II)I",
-        &[(&text).into(), (off as jint).into(), req_modes.into()],
+        &[
+            (&text).into(),
+            (off as jint).into(),
+            (req_modes as jint).into(),
+        ],
     )
     .unwrap()
     .i()
-    .unwrap()
+    .unwrap() as u32
 }
