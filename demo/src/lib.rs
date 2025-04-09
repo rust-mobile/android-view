@@ -544,6 +544,36 @@ impl ViewPeer for DemoViewPeer {
         )
     }
 
+    fn on_create_input_connection<'local>(
+        &mut self,
+        env: &mut JNIEnv<'local>,
+        view: &View<'local>,
+        out_attrs: &EditorInfo<'local>,
+    ) -> bool {
+        out_attrs.set_input_type(
+            env,
+            INPUT_TYPE_CLASS_TEXT
+                | INPUT_TYPE_TEXT_FLAG_CAP_SENTENCES
+                | INPUT_TYPE_TEXT_FLAG_AUTO_CORRECT
+                | INPUT_TYPE_TEXT_FLAG_MULTI_LINE,
+        );
+        out_attrs.set_ime_options(
+            env,
+            IME_FLAG_NO_FULLSCREEN | IME_FLAG_NO_EXTRACT_UI | IME_FLAG_NO_ENTER_ACTION,
+        );
+        let selection = self.editor.editor().raw_selection().text_range();
+        let sel_start = self.editor.utf8_to_utf16_index(selection.start);
+        let sel_end = self.editor.utf8_to_utf16_index(selection.end);
+        out_attrs.set_initial_sel_start(env, sel_start as jint);
+        out_attrs.set_initial_sel_end(env, sel_end as jint);
+        let text = self.editor.editor().raw_text();
+        let initial_caps_mode = caps_mode(env, text, sel_start, CAP_MODE_SENTENCES);
+        out_attrs.set_initial_caps_mode(env, initial_caps_mode);
+        self.editor.driver().clear_compose();
+        self.enqueue_render_if_needed(env, view);
+        true
+    }
+
     fn as_input_connection(&mut self) -> &mut dyn InputConnection {
         self
     }
@@ -609,8 +639,8 @@ impl InputConnection for DemoViewPeer {
         &mut self,
         env: &mut JNIEnv<'local>,
         _view: &View<'local>,
-        req_modes: jint,
-    ) -> jint {
+        req_modes: u32,
+    ) -> u32 {
         let editor = self.editor.editor();
         let text = editor.raw_text();
         let offset = editor.raw_selection().focus().index();
