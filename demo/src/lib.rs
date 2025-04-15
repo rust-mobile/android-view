@@ -644,6 +644,7 @@ impl ViewPeer for DemoViewPeer {
         out_attrs.set_initial_caps_mode(env, initial_caps_mode);
         self.editor.driver().clear_compose();
         self.enqueue_render_if_needed(env, view);
+        self.ime_active = true;
         true.into()
     }
 
