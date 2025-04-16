@@ -5,7 +5,7 @@ use jni::{
 };
 use std::borrow::Cow;
 
-use crate::{binder::*, events::KeyEvent, view::*};
+use crate::{binder::*, callback_ctx::*, events::KeyEvent, view::*};
 
 pub const INPUT_TYPE_MASK_CLASS: u32 = 0x0000000f;
 pub const INPUT_TYPE_MASK_VARIATION: u32 = 0x00000ff0;
@@ -169,185 +169,134 @@ impl<'local> EditorInfo<'local> {
 
 #[allow(unused_variables)]
 pub trait InputConnection {
-    fn text_before_cursor<'slf, 'local>(
+    fn text_before_cursor<'slf>(
         &'slf mut self,
-        env: &mut JNIEnv<'local>,
-        view: &View<'local>,
+        ctx: &mut CallbackCtx,
         n: jint,
     ) -> Option<Cow<'slf, str>>;
     // TODO: styled version
 
-    fn text_after_cursor<'slf, 'local>(
+    fn text_after_cursor<'slf>(
         &'slf mut self,
-        env: &mut JNIEnv<'local>,
-        view: &View<'local>,
+        ctx: &mut CallbackCtx,
         n: jint,
     ) -> Option<Cow<'slf, str>>;
     // TODO: styled version
 
-    fn selected_text<'slf, 'local>(
-        &'slf mut self,
-        env: &mut JNIEnv<'local>,
-        view: &View<'local>,
-    ) -> Option<Cow<'slf, str>>;
+    fn selected_text<'slf>(&'slf mut self, ctx: &mut CallbackCtx) -> Option<Cow<'slf, str>>;
     // TODO: styled version
 
-    fn cursor_caps_mode<'local>(
-        &mut self,
-        env: &mut JNIEnv<'local>,
-        view: &View<'local>,
-        req_modes: u32,
-    ) -> u32;
+    fn cursor_caps_mode(&mut self, ctx: &mut CallbackCtx, req_modes: u32) -> u32;
 
     // TODO: Do we need to bind getExtractedText? Gio's InputConnection
     // just returns null.
 
-    fn delete_surrounding_text<'local>(
+    fn delete_surrounding_text(
         &mut self,
-        env: &mut JNIEnv<'local>,
-        view: &View<'local>,
+        ctx: &mut CallbackCtx,
         before_length: jint,
         after_length: jint,
     ) -> bool;
 
-    fn delete_surrounding_text_in_code_points<'local>(
+    fn delete_surrounding_text_in_code_points(
         &mut self,
-        env: &mut JNIEnv<'local>,
-        view: &View<'local>,
+        ctx: &mut CallbackCtx,
         before_length: jint,
         after_length: jint,
     ) -> bool;
 
-    fn set_composing_text<'local>(
+    fn set_composing_text(
         &mut self,
-        env: &mut JNIEnv<'local>,
-        view: &View<'local>,
+        ctx: &mut CallbackCtx,
         text: &str,
         new_cursor_position: jint,
     ) -> bool;
     // TODO: styled version
 
-    fn set_composing_region<'local>(
-        &mut self,
-        env: &mut JNIEnv<'local>,
-        view: &View<'local>,
-        start: jint,
-        end: jint,
-    ) -> bool;
+    fn set_composing_region(&mut self, ctx: &mut CallbackCtx, start: jint, end: jint) -> bool;
 
-    fn finish_composing_text<'local>(
-        &mut self,
-        env: &mut JNIEnv<'local>,
-        view: &View<'local>,
-    ) -> bool;
+    fn finish_composing_text(&mut self, ctx: &mut CallbackCtx) -> bool;
 
-    fn commit_text<'local>(
-        &mut self,
-        env: &mut JNIEnv<'local>,
-        view: &View<'local>,
-        text: &str,
-        new_cursor_position: jint,
-    ) -> bool {
-        self.set_composing_text(env, view, text, new_cursor_position)
-            && self.finish_composing_text(env, view)
-    }
+    fn commit_text(&mut self, ctx: &mut CallbackCtx, text: &str, new_cursor_position: jint)
+    -> bool;
     // TODO: styled version
 
     // TODO: Do we need to bind commitCompletion or commitCoorrection?
     // Gio's InputConnection just returns false for both.
 
-    fn set_selection<'local>(
-        &mut self,
-        env: &mut JNIEnv<'local>,
-        view: &View<'local>,
-        start: jint,
-        end: jint,
-    ) -> bool;
+    fn set_selection(&mut self, ctx: &mut CallbackCtx, start: jint, end: jint) -> bool;
 
-    fn perform_editor_action<'local>(
-        &mut self,
-        env: &mut JNIEnv<'local>,
-        view: &View<'local>,
-        editor_action: jint,
-    ) -> bool;
+    fn perform_editor_action(&mut self, ctx: &mut CallbackCtx, editor_action: jint) -> bool;
 
-    fn perform_context_menu_action<'local>(
-        &mut self,
-        env: &mut JNIEnv<'local>,
-        view: &View<'local>,
-        id: jint,
-    ) -> bool {
+    fn perform_context_menu_action(&mut self, ctx: &mut CallbackCtx, id: jint) -> bool {
         false
     }
 
-    fn begin_batch_edit<'local>(&mut self, env: &mut JNIEnv<'local>, view: &View<'local>) -> bool;
+    fn begin_batch_edit(&mut self, ctx: &mut CallbackCtx) -> bool;
 
-    fn end_batch_edit<'local>(&mut self, env: &mut JNIEnv<'local>, view: &View<'local>) -> bool;
+    fn end_batch_edit(&mut self, ctx: &mut CallbackCtx) -> bool;
 
     fn send_key_event<'local>(
         &mut self,
-        env: &mut JNIEnv<'local>,
-        view: &View<'local>,
+        ctx: &mut CallbackCtx<'local>,
         event: &KeyEvent<'local>,
     ) -> bool;
 
-    fn clear_meta_key_states<'local>(
-        &mut self,
-        env: &mut JNIEnv<'local>,
-        view: &View<'local>,
-        states: jint,
-    ) -> bool {
+    fn clear_meta_key_states(&mut self, ctx: &mut CallbackCtx, states: jint) -> bool {
         false
     }
 
-    fn report_fullscreen_mode<'local>(
-        &mut self,
-        env: &mut JNIEnv<'local>,
-        view: &View<'local>,
-        enabled: bool,
-    ) -> bool {
+    fn report_fullscreen_mode(&mut self, ctx: &mut CallbackCtx, enabled: bool) -> bool {
         false
     }
 
     // TODO: Do we need to bind performPrivateCommand? Gio's InputConnection
     // just returns false.
 
-    fn request_cursor_updates<'local>(
-        &mut self,
-        env: &mut JNIEnv<'local>,
-        view: &View<'local>,
-        cursor_update_mode: jint,
-    ) -> bool;
+    fn request_cursor_updates(&mut self, ctx: &mut CallbackCtx, cursor_update_mode: jint) -> bool;
 
-    fn close_connection<'local>(&mut self, env: &mut JNIEnv<'local>, view: &View<'local>) {}
+    fn close_connection(&mut self, ctx: &mut CallbackCtx) {}
 
     // TODO: Do we need to bind commitContent? Gio's InputConnection
     // just returns false.
 }
 
-fn with_input_connection_and_default<F, T>(id: jlong, default: T, f: F) -> T
+fn with_input_connection_and_default<'local, F, T>(
+    env: JNIEnv<'local>,
+    view: View<'local>,
+    id: jlong,
+    default: T,
+    f: F,
+) -> T
 where
-    F: FnOnce(&mut dyn InputConnection) -> T,
+    F: FnOnce(&mut CallbackCtx<'local>, &mut dyn InputConnection) -> T,
 {
-    with_peer_and_default(id, default, |peer| f(peer.as_input_connection()))
+    with_peer_and_default(env, view, id, default, |ctx, peer| {
+        f(ctx, peer.as_input_connection())
+    })
 }
 
-fn with_input_connection<F, T: Default>(id: jlong, f: F) -> T
+fn with_input_connection<'local, F, T: Default>(
+    env: JNIEnv<'local>,
+    view: View<'local>,
+    id: jlong,
+    f: F,
+) -> T
 where
-    F: FnOnce(&mut dyn InputConnection) -> T,
+    F: FnOnce(&mut CallbackCtx<'local>, &mut dyn InputConnection) -> T,
 {
-    with_input_connection_and_default(id, T::default(), f)
+    with_input_connection_and_default(env, view, id, T::default(), f)
 }
 
 pub(crate) extern "system" fn get_text_before_cursor<'local>(
-    mut env: JNIEnv<'local>,
+    env: JNIEnv<'local>,
     view: View<'local>,
     peer: jlong,
     n: jint,
 ) -> JString<'local> {
-    with_input_connection(peer, |ic| {
-        if let Some(result) = ic.text_before_cursor(&mut env, &view, n) {
-            env.new_string(result).unwrap()
+    with_input_connection(env, view, peer, |ctx, ic| {
+        if let Some(result) = ic.text_before_cursor(ctx, n) {
+            ctx.env.new_string(result).unwrap()
         } else {
             JObject::null().into()
         }
@@ -355,14 +304,14 @@ pub(crate) extern "system" fn get_text_before_cursor<'local>(
 }
 
 pub(crate) extern "system" fn get_text_after_cursor<'local>(
-    mut env: JNIEnv<'local>,
+    env: JNIEnv<'local>,
     view: View<'local>,
     peer: jlong,
     n: jint,
 ) -> JString<'local> {
-    with_input_connection(peer, |ic| {
-        if let Some(result) = ic.text_after_cursor(&mut env, &view, n) {
-            env.new_string(result).unwrap()
+    with_input_connection(env, view, peer, |ctx, ic| {
+        if let Some(result) = ic.text_after_cursor(ctx, n) {
+            ctx.env.new_string(result).unwrap()
         } else {
             JObject::null().into()
         }
@@ -370,13 +319,13 @@ pub(crate) extern "system" fn get_text_after_cursor<'local>(
 }
 
 pub(crate) extern "system" fn get_selected_text<'local>(
-    mut env: JNIEnv<'local>,
+    env: JNIEnv<'local>,
     view: View<'local>,
     peer: jlong,
 ) -> JString<'local> {
-    with_input_connection(peer, |ic| {
-        if let Some(result) = ic.selected_text(&mut env, &view) {
-            env.new_string(result).unwrap()
+    with_input_connection(env, view, peer, |ctx, ic| {
+        if let Some(result) = ic.selected_text(ctx) {
+            ctx.env.new_string(result).unwrap()
         } else {
             JObject::null().into()
         }
@@ -384,25 +333,25 @@ pub(crate) extern "system" fn get_selected_text<'local>(
 }
 
 pub(crate) extern "system" fn get_cursor_caps_mode<'local>(
-    mut env: JNIEnv<'local>,
+    env: JNIEnv<'local>,
     view: View<'local>,
     peer: jlong,
     req_modes: jint,
 ) -> jint {
-    with_input_connection(peer, |ic| {
-        ic.cursor_caps_mode(&mut env, &view, req_modes as u32) as jint
+    with_input_connection(env, view, peer, |ctx, ic| {
+        ic.cursor_caps_mode(ctx, req_modes as u32) as jint
     })
 }
 
 pub(crate) extern "system" fn delete_surrounding_text<'local>(
-    mut env: JNIEnv<'local>,
+    env: JNIEnv<'local>,
     view: View<'local>,
     peer: jlong,
     before_length: jint,
     after_length: jint,
 ) -> jboolean {
-    with_input_connection(peer, |ic| {
-        if ic.delete_surrounding_text(&mut env, &view, before_length, after_length) {
+    with_input_connection(env, view, peer, |ctx, ic| {
+        if ic.delete_surrounding_text(ctx, before_length, after_length) {
             JNI_TRUE
         } else {
             JNI_FALSE
@@ -411,14 +360,14 @@ pub(crate) extern "system" fn delete_surrounding_text<'local>(
 }
 
 pub(crate) extern "system" fn delete_surrounding_text_in_code_points<'local>(
-    mut env: JNIEnv<'local>,
+    env: JNIEnv<'local>,
     view: View<'local>,
     peer: jlong,
     before_length: jint,
     after_length: jint,
 ) -> jboolean {
-    with_input_connection(peer, |ic| {
-        if ic.delete_surrounding_text_in_code_points(&mut env, &view, before_length, after_length) {
+    with_input_connection(env, view, peer, |ctx, ic| {
+        if ic.delete_surrounding_text_in_code_points(ctx, before_length, after_length) {
             JNI_TRUE
         } else {
             JNI_FALSE
@@ -427,16 +376,16 @@ pub(crate) extern "system" fn delete_surrounding_text_in_code_points<'local>(
 }
 
 pub(crate) extern "system" fn set_composing_text<'local>(
-    mut env: JNIEnv<'local>,
+    env: JNIEnv<'local>,
     view: View<'local>,
     peer: jlong,
     text: JString<'local>,
     new_cursor_position: jint,
 ) -> jboolean {
-    with_input_connection(peer, |ic| {
-        let text = env.get_string(&text).unwrap();
+    with_input_connection(env, view, peer, |ctx, ic| {
+        let text = ctx.env.get_string(&text).unwrap();
         let text = Cow::from(&text);
-        if ic.set_composing_text(&mut env, &view, &text, new_cursor_position) {
+        if ic.set_composing_text(ctx, &text, new_cursor_position) {
             JNI_TRUE
         } else {
             JNI_FALSE
@@ -445,14 +394,14 @@ pub(crate) extern "system" fn set_composing_text<'local>(
 }
 
 pub(crate) extern "system" fn set_composing_region<'local>(
-    mut env: JNIEnv<'local>,
+    env: JNIEnv<'local>,
     view: View<'local>,
     peer: jlong,
     start: jint,
     end: jint,
 ) -> jboolean {
-    with_input_connection(peer, |ic| {
-        if ic.set_composing_region(&mut env, &view, start, end) {
+    with_input_connection(env, view, peer, |ctx, ic| {
+        if ic.set_composing_region(ctx, start, end) {
             JNI_TRUE
         } else {
             JNI_FALSE
@@ -461,12 +410,12 @@ pub(crate) extern "system" fn set_composing_region<'local>(
 }
 
 pub(crate) extern "system" fn finish_composing_text<'local>(
-    mut env: JNIEnv<'local>,
+    env: JNIEnv<'local>,
     view: View<'local>,
     peer: jlong,
 ) -> jboolean {
-    with_input_connection(peer, |ic| {
-        if ic.finish_composing_text(&mut env, &view) {
+    with_input_connection(env, view, peer, |ctx, ic| {
+        if ic.finish_composing_text(ctx) {
             JNI_TRUE
         } else {
             JNI_FALSE
@@ -475,16 +424,16 @@ pub(crate) extern "system" fn finish_composing_text<'local>(
 }
 
 pub(crate) extern "system" fn commit_text<'local>(
-    mut env: JNIEnv<'local>,
+    env: JNIEnv<'local>,
     view: View<'local>,
     peer: jlong,
     text: JString<'local>,
     new_cursor_position: jint,
 ) -> jboolean {
-    with_input_connection(peer, |ic| {
-        let text = env.get_string(&text).unwrap();
+    with_input_connection(env, view, peer, |ctx, ic| {
+        let text = ctx.env.get_string(&text).unwrap();
         let text = Cow::from(&text);
-        if ic.commit_text(&mut env, &view, &text, new_cursor_position) {
+        if ic.commit_text(ctx, &text, new_cursor_position) {
             JNI_TRUE
         } else {
             JNI_FALSE
@@ -493,14 +442,14 @@ pub(crate) extern "system" fn commit_text<'local>(
 }
 
 pub(crate) extern "system" fn set_selection<'local>(
-    mut env: JNIEnv<'local>,
+    env: JNIEnv<'local>,
     view: View<'local>,
     peer: jlong,
     start: jint,
     end: jint,
 ) -> jboolean {
-    with_input_connection(peer, |ic| {
-        if ic.set_selection(&mut env, &view, start, end) {
+    with_input_connection(env, view, peer, |ctx, ic| {
+        if ic.set_selection(ctx, start, end) {
             JNI_TRUE
         } else {
             JNI_FALSE
@@ -509,13 +458,13 @@ pub(crate) extern "system" fn set_selection<'local>(
 }
 
 pub(crate) extern "system" fn perform_editor_action<'local>(
-    mut env: JNIEnv<'local>,
+    env: JNIEnv<'local>,
     view: View<'local>,
     peer: jlong,
     editor_action: jint,
 ) -> jboolean {
-    with_input_connection(peer, |ic| {
-        if ic.perform_editor_action(&mut env, &view, editor_action) {
+    with_input_connection(env, view, peer, |ctx, ic| {
+        if ic.perform_editor_action(ctx, editor_action) {
             JNI_TRUE
         } else {
             JNI_FALSE
@@ -524,13 +473,13 @@ pub(crate) extern "system" fn perform_editor_action<'local>(
 }
 
 pub(crate) extern "system" fn perform_context_menu_action<'local>(
-    mut env: JNIEnv<'local>,
+    env: JNIEnv<'local>,
     view: View<'local>,
     peer: jlong,
     id: jint,
 ) -> jboolean {
-    with_input_connection(peer, |ic| {
-        if ic.perform_context_menu_action(&mut env, &view, id) {
+    with_input_connection(env, view, peer, |ctx, ic| {
+        if ic.perform_context_menu_action(ctx, id) {
             JNI_TRUE
         } else {
             JNI_FALSE
@@ -539,12 +488,12 @@ pub(crate) extern "system" fn perform_context_menu_action<'local>(
 }
 
 pub(crate) extern "system" fn begin_batch_edit<'local>(
-    mut env: JNIEnv<'local>,
+    env: JNIEnv<'local>,
     view: View<'local>,
     peer: jlong,
 ) -> jboolean {
-    with_input_connection(peer, |ic| {
-        if ic.begin_batch_edit(&mut env, &view) {
+    with_input_connection(env, view, peer, |ctx, ic| {
+        if ic.begin_batch_edit(ctx) {
             JNI_TRUE
         } else {
             JNI_FALSE
@@ -553,12 +502,12 @@ pub(crate) extern "system" fn begin_batch_edit<'local>(
 }
 
 pub(crate) extern "system" fn end_batch_edit<'local>(
-    mut env: JNIEnv<'local>,
+    env: JNIEnv<'local>,
     view: View<'local>,
     peer: jlong,
 ) -> jboolean {
-    with_input_connection(peer, |ic| {
-        if ic.end_batch_edit(&mut env, &view) {
+    with_input_connection(env, view, peer, |ctx, ic| {
+        if ic.end_batch_edit(ctx) {
             JNI_TRUE
         } else {
             JNI_FALSE
@@ -567,13 +516,13 @@ pub(crate) extern "system" fn end_batch_edit<'local>(
 }
 
 pub(crate) extern "system" fn input_connection_send_key_event<'local>(
-    mut env: JNIEnv<'local>,
+    env: JNIEnv<'local>,
     view: View<'local>,
     peer: jlong,
     event: KeyEvent<'local>,
 ) -> jboolean {
-    with_input_connection(peer, |ic| {
-        if ic.send_key_event(&mut env, &view, &event) {
+    with_input_connection(env, view, peer, |ctx, ic| {
+        if ic.send_key_event(ctx, &event) {
             JNI_TRUE
         } else {
             JNI_FALSE
@@ -582,13 +531,13 @@ pub(crate) extern "system" fn input_connection_send_key_event<'local>(
 }
 
 pub(crate) extern "system" fn input_connection_clear_meta_key_states<'local>(
-    mut env: JNIEnv<'local>,
+    env: JNIEnv<'local>,
     view: View<'local>,
     peer: jlong,
     states: jint,
 ) -> jboolean {
-    with_input_connection(peer, |ic| {
-        if ic.clear_meta_key_states(&mut env, &view, states) {
+    with_input_connection(env, view, peer, |ctx, ic| {
+        if ic.clear_meta_key_states(ctx, states) {
             JNI_TRUE
         } else {
             JNI_FALSE
@@ -597,13 +546,13 @@ pub(crate) extern "system" fn input_connection_clear_meta_key_states<'local>(
 }
 
 pub(crate) extern "system" fn input_connection_report_fullscreen_mode<'local>(
-    mut env: JNIEnv<'local>,
+    env: JNIEnv<'local>,
     view: View<'local>,
     peer: jlong,
     enabled: jboolean,
 ) -> jboolean {
-    with_input_connection(peer, |ic| {
-        if ic.report_fullscreen_mode(&mut env, &view, enabled == JNI_TRUE) {
+    with_input_connection(env, view, peer, |ctx, ic| {
+        if ic.report_fullscreen_mode(ctx, enabled == JNI_TRUE) {
             JNI_TRUE
         } else {
             JNI_FALSE
@@ -612,13 +561,13 @@ pub(crate) extern "system" fn input_connection_report_fullscreen_mode<'local>(
 }
 
 pub(crate) extern "system" fn request_cursor_updates<'local>(
-    mut env: JNIEnv<'local>,
+    env: JNIEnv<'local>,
     view: View<'local>,
     peer: jlong,
     cursor_update_mode: jint,
 ) -> jboolean {
-    with_input_connection(peer, |ic| {
-        if ic.request_cursor_updates(&mut env, &view, cursor_update_mode) {
+    with_input_connection(env, view, peer, |ctx, ic| {
+        if ic.request_cursor_updates(ctx, cursor_update_mode) {
             JNI_TRUE
         } else {
             JNI_FALSE
@@ -627,12 +576,12 @@ pub(crate) extern "system" fn request_cursor_updates<'local>(
 }
 
 pub(crate) extern "system" fn close_input_connection<'local>(
-    mut env: JNIEnv<'local>,
+    env: JNIEnv<'local>,
     view: View<'local>,
     peer: jlong,
 ) {
-    with_input_connection(peer, |ic| {
-        ic.close_connection(&mut env, &view);
+    with_input_connection(env, view, peer, |ctx, ic| {
+        ic.close_connection(ctx);
     })
 }
 

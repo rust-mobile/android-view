@@ -152,41 +152,36 @@ struct DemoViewPeer {
 }
 
 impl DemoViewPeer {
-    fn enqueue_render_if_needed<'local>(&mut self, env: &mut JNIEnv<'local>, view: &View<'local>) {
+    fn enqueue_render_if_needed(&mut self, ctx: &mut CallbackCtx) {
         if self.render_surface.is_none()
             || self.last_drawn_generation == self.editor.generation()
             || self.batch_edit_depth != 0
         {
             return;
         }
-        view.post_frame_callback(env);
+        ctx.view.post_frame_callback(&mut ctx.env);
     }
 
-    fn schedule_next_blink<'local>(&self, env: &mut JNIEnv<'local>, view: &View<'local>) {
+    fn schedule_next_blink(&self, ctx: &mut CallbackCtx) {
         if let Some(next_time) = self.editor.next_blink_time() {
             let delay = next_time.duration_since(Instant::now());
-            view.post_delayed(env, delay.as_millis() as _);
+            ctx.view.post_delayed(&mut ctx.env, delay.as_millis() as _);
         }
     }
 
-    fn update_cursor_state<'local>(
-        &mut self,
-        env: &mut JNIEnv<'local>,
-        view: &View<'local>,
-        focused: bool,
-    ) {
+    fn update_cursor_state(&mut self, ctx: &mut CallbackCtx, focused: bool) {
         self.last_drawn_generation = Default::default();
-        view.remove_delayed_callbacks(env);
+        ctx.view.remove_delayed_callbacks(&mut ctx.env);
         if focused {
             self.editor.cursor_reset();
-            self.schedule_next_blink(env, view);
+            self.schedule_next_blink(ctx);
         } else {
             self.editor.disable_blink();
             self.editor.cursor_blink();
         }
     }
 
-    fn render<'local>(&mut self, env: &mut JNIEnv<'local>, view: &View<'local>) {
+    fn render(&mut self, ctx: &mut CallbackCtx) {
         // Get the RenderSurface (surface + config).
         let surface = self.render_surface.as_ref().unwrap();
 
@@ -211,7 +206,7 @@ impl DemoViewPeer {
 
             self.last_drawn_generation = self.editor.draw(&mut self.scene);
 
-            let view_class = env.get_object_class(&view.0).unwrap();
+            let view_class = ctx.env.get_object_class(&ctx.view.0).unwrap();
             let mut tree_source = EditorAccessTreeSource {
                 render_surface: &self.render_surface,
                 editor: &mut self.editor,
@@ -227,13 +222,13 @@ impl DemoViewPeer {
                     update.nodes.push((TEXT_INPUT_ID, node));
                     update
                 },
-                env,
+                &mut ctx.env,
                 &view_class,
-                &view.0,
+                &ctx.view.0,
             );
 
             if self.ime_active {
-                let imm = view.input_method_manager(env);
+                let imm = ctx.view.input_method_manager(&mut ctx.env);
                 let selection = self.editor.editor().raw_selection().text_range();
                 let sel_start = self.editor.utf8_to_utf16_index(selection.start) as jint;
                 let sel_end = self.editor.utf8_to_utf16_index(selection.end) as jint;
@@ -245,7 +240,14 @@ impl DemoViewPeer {
                 } else {
                     (-1, -1)
                 };
-                imm.update_selection(env, view, sel_start, sel_end, comp_start, comp_end);
+                imm.update_selection(
+                    &mut ctx.env,
+                    &ctx.view,
+                    sel_start,
+                    sel_end,
+                    comp_start,
+                    comp_end,
+                );
             }
         }
 
@@ -272,6 +274,42 @@ impl DemoViewPeer {
 
         device_handle.device.poll(wgpu::Maintain::Poll);
     }
+
+    fn set_composing_text_internal(&mut self, text: &str, new_cursor_position: jint) {
+        let mut drv = self.editor.driver();
+        if text.is_empty() {
+            if drv.editor.is_composing() {
+                drv.clear_compose();
+            } else {
+                drv.delete_selection();
+            }
+        } else {
+            // We always pass a cursor offset of 0 to `PlainEditor::set_compose`
+            // and then set the cursor using our own logic.
+            drv.set_compose(text, Some((0, 0)));
+        }
+        let range = drv
+            .editor
+            .raw_compose()
+            .clone()
+            .unwrap_or_else(|| drv.editor.raw_selection().text_range());
+        drop(drv);
+        let start_utf16 = self.editor.utf8_to_utf16_index(range.start);
+        let end_utf16 = self.editor.utf8_to_utf16_index(range.end);
+        let cursor_pos_utf16 = if new_cursor_position > 0 {
+            let len_utf16 = self
+                .editor
+                .utf8_to_utf16_index(self.editor.editor().raw_text().len());
+            end_utf16
+                .saturating_add((new_cursor_position - 1) as usize)
+                .min(len_utf16)
+        } else {
+            start_utf16.saturating_sub(-new_cursor_position as usize)
+        };
+        let cursor_pos = self.editor.utf16_to_utf8_index(cursor_pos_utf16);
+        let mut drv = self.editor.driver();
+        drv.move_to_byte(cursor_pos);
+    }
 }
 
 impl ViewPeer for DemoViewPeer {
@@ -279,34 +317,31 @@ impl ViewPeer for DemoViewPeer {
 
     fn on_key_down<'local>(
         &mut self,
-        env: &mut JNIEnv<'local>,
-        view: &View<'local>,
+        ctx: &mut CallbackCtx<'local>,
         key_code: Keycode,
         event: &KeyEvent<'local>,
     ) -> bool {
-        if !self.editor.on_key_down(env, key_code, event) {
+        if !self.editor.on_key_down(&mut ctx.env, key_code, event) {
             return false;
         }
-        self.enqueue_render_if_needed(env, view);
+        self.enqueue_render_if_needed(ctx);
         true
     }
 
     fn on_focus_changed<'local>(
         &mut self,
-        env: &mut JNIEnv<'local>,
-        view: &View<'local>,
+        ctx: &mut CallbackCtx<'local>,
         gain_focus: bool,
         _direction: jint,
         _previously_focused_rect: Option<&Rect<'local>>,
     ) {
-        self.update_cursor_state(env, view, gain_focus);
-        self.enqueue_render_if_needed(env, view);
+        self.update_cursor_state(ctx, gain_focus);
+        self.enqueue_render_if_needed(ctx);
     }
 
     fn surface_changed<'local>(
         &mut self,
-        env: &mut JNIEnv<'local>,
-        view: &View<'local>,
+        ctx: &mut CallbackCtx<'local>,
         holder: &SurfaceHolder<'local>,
         _format: jint,
         width: jint,
@@ -316,10 +351,10 @@ impl ViewPeer for DemoViewPeer {
         editor.set_scale(1.0);
         editor.set_width(Some(width as f32 - 2_f32 * text::INSET));
         self.last_drawn_generation = Default::default();
-        let focused = view.is_focused(env);
-        self.update_cursor_state(env, view, focused);
+        let focused = ctx.view.is_focused(&mut ctx.env);
+        self.update_cursor_state(ctx, focused);
 
-        let window = holder.surface(env).to_native_window(env);
+        let window = holder.surface(&mut ctx.env).to_native_window(&mut ctx.env);
         // Drop the old surface, if any, that owned the native window
         // before creating a new one. Otherwise, we crash with
         // ERROR_NATIVE_WINDOW_IN_USE_KHR.
@@ -354,40 +389,33 @@ impl ViewPeer for DemoViewPeer {
             .get_or_insert_with(|| create_vello_renderer(&self.context, &surface));
         self.render_surface = Some(surface);
 
-        self.render(env, view);
+        self.render(ctx);
     }
 
     fn surface_destroyed<'local>(
         &mut self,
-        env: &mut JNIEnv<'local>,
-        view: &View<'local>,
+        ctx: &mut CallbackCtx<'local>,
         _holder: &SurfaceHolder<'local>,
     ) {
         self.render_surface = None;
-        view.remove_frame_callback(env);
-        view.remove_delayed_callbacks(env);
+        ctx.view.remove_frame_callback(&mut ctx.env);
+        ctx.view.remove_delayed_callbacks(&mut ctx.env);
     }
 
-    fn do_frame<'local>(
-        &mut self,
-        env: &mut JNIEnv<'local>,
-        view: &View<'local>,
-        _frame_time_nanos: jlong,
-    ) {
-        self.render(env, view)
+    fn do_frame(&mut self, ctx: &mut CallbackCtx, _frame_time_nanos: jlong) {
+        self.render(ctx);
     }
 
-    fn delayed_callback<'local>(&mut self, env: &mut JNIEnv<'local>, view: &View<'local>) {
+    fn delayed_callback(&mut self, ctx: &mut CallbackCtx) {
         self.editor.cursor_blink();
         self.last_drawn_generation = Default::default();
-        self.enqueue_render_if_needed(env, view);
-        self.schedule_next_blink(env, view);
+        self.enqueue_render_if_needed(ctx);
+        self.schedule_next_blink(ctx);
     }
 
     fn populate_accessibility_node_info<'local>(
         &mut self,
-        env: &mut JNIEnv<'local>,
-        view: &View<'local>,
+        ctx: &mut CallbackCtx<'local>,
         host_screen_x: jint,
         host_screen_y: jint,
         virtual_view_id: jint,
@@ -400,8 +428,8 @@ impl ViewPeer for DemoViewPeer {
         self.access_adapter
             .populate_node_info(
                 &mut tree_source,
-                env,
-                &view.0,
+                &mut ctx.env,
+                &ctx.view.0,
                 host_screen_x,
                 host_screen_y,
                 virtual_view_id,
@@ -410,7 +438,7 @@ impl ViewPeer for DemoViewPeer {
             .unwrap()
     }
 
-    fn input_focus<'local>(&mut self, _env: &mut JNIEnv<'local>, _view: &View<'local>) -> jint {
+    fn input_focus(&mut self, _ctx: &mut CallbackCtx) -> jint {
         let mut tree_source = EditorAccessTreeSource {
             render_surface: &self.render_surface,
             editor: &mut self.editor,
@@ -418,13 +446,7 @@ impl ViewPeer for DemoViewPeer {
         self.access_adapter.input_focus(&mut tree_source)
     }
 
-    fn virtual_view_at_point<'local>(
-        &mut self,
-        _env: &mut JNIEnv<'local>,
-        _view: &View<'local>,
-        x: jfloat,
-        y: jfloat,
-    ) -> jint {
+    fn virtual_view_at_point(&mut self, _ctx: &mut CallbackCtx, x: jfloat, y: jfloat) -> jint {
         let mut tree_source = EditorAccessTreeSource {
             render_surface: &self.render_surface,
             editor: &mut self.editor,
@@ -433,10 +455,9 @@ impl ViewPeer for DemoViewPeer {
             .virtual_view_at_point(&mut tree_source, x, y)
     }
 
-    fn perform_accessibility_action<'local>(
+    fn perform_accessibility_action(
         &mut self,
-        env: &mut JNIEnv<'local>,
-        view: &View<'local>,
+        ctx: &mut CallbackCtx,
         virtual_view_id: jint,
         action: jint,
     ) -> bool {
@@ -449,14 +470,13 @@ impl ViewPeer for DemoViewPeer {
         {
             return false;
         }
-        self.enqueue_render_if_needed(env, view);
+        self.enqueue_render_if_needed(ctx);
         true
     }
 
-    fn accessibility_set_text_selection<'local>(
+    fn accessibility_set_text_selection(
         &mut self,
-        env: &mut JNIEnv<'local>,
-        view: &View<'local>,
+        ctx: &mut CallbackCtx,
         virtual_view_id: jint,
         anchor: jint,
         focus: jint,
@@ -464,49 +484,47 @@ impl ViewPeer for DemoViewPeer {
         let mut action_handler = EditorAccessActionHandler {
             editor: &mut self.editor,
         };
-        let view_class = env.get_object_class(&view.0).unwrap();
+        let view_class = ctx.env.get_object_class(&ctx.view.0).unwrap();
         if !self.access_adapter.set_text_selection(
             &mut action_handler,
-            env,
+            &mut ctx.env,
             &view_class,
-            &view.0,
+            &ctx.view.0,
             virtual_view_id,
             anchor,
             focus,
         ) {
             return false;
         }
-        self.enqueue_render_if_needed(env, view);
+        self.enqueue_render_if_needed(ctx);
         true
     }
 
-    fn accessibility_collapse_text_selection<'local>(
+    fn accessibility_collapse_text_selection(
         &mut self,
-        env: &mut JNIEnv<'local>,
-        view: &View<'local>,
+        ctx: &mut CallbackCtx,
         virtual_view_id: jint,
     ) -> bool {
         let mut action_handler = EditorAccessActionHandler {
             editor: &mut self.editor,
         };
-        let view_class = env.get_object_class(&view.0).unwrap();
+        let view_class = ctx.env.get_object_class(&ctx.view.0).unwrap();
         if !self.access_adapter.collapse_text_selection(
             &mut action_handler,
-            env,
+            &mut ctx.env,
             &view_class,
-            &view.0,
+            &ctx.view.0,
             virtual_view_id,
         ) {
             return false;
         }
-        self.enqueue_render_if_needed(env, view);
+        self.enqueue_render_if_needed(ctx);
         true
     }
 
-    fn accessibility_traverse_text<'local>(
+    fn accessibility_traverse_text(
         &mut self,
-        env: &mut JNIEnv<'local>,
-        view: &View<'local>,
+        ctx: &mut CallbackCtx,
         virtual_view_id: jint,
         granularity: jint,
         forward: bool,
@@ -515,12 +533,12 @@ impl ViewPeer for DemoViewPeer {
         let mut action_handler = EditorAccessActionHandler {
             editor: &mut self.editor,
         };
-        let view_class = env.get_object_class(&view.0).unwrap();
+        let view_class = ctx.env.get_object_class(&ctx.view.0).unwrap();
         if !self.access_adapter.traverse_text(
             &mut action_handler,
-            env,
+            &mut ctx.env,
             &view_class,
-            &view.0,
+            &ctx.view.0,
             virtual_view_id,
             granularity,
             forward,
@@ -528,37 +546,36 @@ impl ViewPeer for DemoViewPeer {
         ) {
             return false;
         }
-        self.enqueue_render_if_needed(env, view);
+        self.enqueue_render_if_needed(ctx);
         true
     }
 
     fn on_create_input_connection<'local>(
         &mut self,
-        env: &mut JNIEnv<'local>,
-        view: &View<'local>,
+        ctx: &mut CallbackCtx<'local>,
         out_attrs: &EditorInfo<'local>,
     ) -> bool {
         out_attrs.set_input_type(
-            env,
+            &mut ctx.env,
             INPUT_TYPE_CLASS_TEXT
                 | INPUT_TYPE_TEXT_FLAG_CAP_SENTENCES
                 | INPUT_TYPE_TEXT_FLAG_AUTO_CORRECT
                 | INPUT_TYPE_TEXT_FLAG_MULTI_LINE,
         );
         out_attrs.set_ime_options(
-            env,
+            &mut ctx.env,
             IME_FLAG_NO_FULLSCREEN | IME_FLAG_NO_EXTRACT_UI | IME_FLAG_NO_ENTER_ACTION,
         );
         let selection = self.editor.editor().raw_selection().text_range();
         let sel_start = self.editor.utf8_to_utf16_index(selection.start);
         let sel_end = self.editor.utf8_to_utf16_index(selection.end);
-        out_attrs.set_initial_sel_start(env, sel_start as jint);
-        out_attrs.set_initial_sel_end(env, sel_end as jint);
+        out_attrs.set_initial_sel_start(&mut ctx.env, sel_start as jint);
+        out_attrs.set_initial_sel_end(&mut ctx.env, sel_end as jint);
         let text = self.editor.editor().raw_text();
-        let initial_caps_mode = caps_mode(env, text, sel_start, CAP_MODE_SENTENCES);
-        out_attrs.set_initial_caps_mode(env, initial_caps_mode);
+        let initial_caps_mode = caps_mode(&mut ctx.env, text, sel_start, CAP_MODE_SENTENCES);
+        out_attrs.set_initial_caps_mode(&mut ctx.env, initial_caps_mode);
         self.editor.driver().clear_compose();
-        self.enqueue_render_if_needed(env, view);
+        self.enqueue_render_if_needed(ctx);
         self.ime_active = true;
         true
     }
@@ -569,10 +586,9 @@ impl ViewPeer for DemoViewPeer {
 }
 
 impl InputConnection for DemoViewPeer {
-    fn text_before_cursor<'slf, 'local>(
+    fn text_before_cursor<'slf>(
         &'slf mut self,
-        _env: &mut JNIEnv<'local>,
-        _view: &View<'local>,
+        _ctx: &mut CallbackCtx,
         n: jint,
     ) -> Option<Cow<'slf, str>> {
         if n < 0 {
@@ -592,10 +608,9 @@ impl InputConnection for DemoViewPeer {
         Some(Cow::Borrowed(&text[range_start..range_end]))
     }
 
-    fn text_after_cursor<'slf, 'local>(
+    fn text_after_cursor<'slf>(
         &'slf mut self,
-        _env: &mut JNIEnv<'local>,
-        _view: &View<'local>,
+        _ctx: &mut CallbackCtx,
         n: jint,
     ) -> Option<Cow<'slf, str>> {
         if n < 0 {
@@ -616,31 +631,21 @@ impl InputConnection for DemoViewPeer {
         Some(Cow::Borrowed(&text[range_start..range_end]))
     }
 
-    fn selected_text<'slf, 'local>(
-        &'slf mut self,
-        _env: &mut JNIEnv<'local>,
-        _view: &View<'local>,
-    ) -> Option<Cow<'slf, str>> {
+    fn selected_text<'slf>(&'slf mut self, _ctx: &mut CallbackCtx) -> Option<Cow<'slf, str>> {
         self.editor.editor().selected_text().map(Cow::Borrowed)
     }
 
-    fn cursor_caps_mode<'local>(
-        &mut self,
-        env: &mut JNIEnv<'local>,
-        _view: &View<'local>,
-        req_modes: u32,
-    ) -> u32 {
+    fn cursor_caps_mode(&mut self, ctx: &mut CallbackCtx, req_modes: u32) -> u32 {
         let editor = self.editor.editor();
         let text = editor.raw_text();
         let offset = editor.raw_selection().focus().index();
         let offset_utf16 = self.editor.utf8_to_utf16_index(offset);
-        caps_mode(env, text, offset_utf16, req_modes)
+        caps_mode(&mut ctx.env, text, offset_utf16, req_modes)
     }
 
-    fn delete_surrounding_text<'local>(
+    fn delete_surrounding_text(
         &mut self,
-        env: &mut JNIEnv<'local>,
-        view: &View<'local>,
+        ctx: &mut CallbackCtx,
         before_length: jint,
         after_length: jint,
     ) -> bool {
@@ -669,14 +674,13 @@ impl InputConnection for DemoViewPeer {
                 drv.delete_bytes_after_selection(len);
             }
         }
-        self.enqueue_render_if_needed(env, view);
+        self.enqueue_render_if_needed(ctx);
         true
     }
 
-    fn delete_surrounding_text_in_code_points<'local>(
+    fn delete_surrounding_text_in_code_points(
         &mut self,
-        env: &mut JNIEnv<'local>,
-        view: &View<'local>,
+        ctx: &mut CallbackCtx,
         before_length: jint,
         after_length: jint,
     ) -> bool {
@@ -705,61 +709,22 @@ impl InputConnection for DemoViewPeer {
                 drv.delete_bytes_after_selection(len);
             }
         }
-        self.enqueue_render_if_needed(env, view);
+        self.enqueue_render_if_needed(ctx);
         true
     }
 
-    fn set_composing_text<'local>(
+    fn set_composing_text(
         &mut self,
-        env: &mut JNIEnv<'local>,
-        view: &View<'local>,
+        ctx: &mut CallbackCtx,
         text: &str,
         new_cursor_position: jint,
     ) -> bool {
-        let mut drv = self.editor.driver();
-        if text.is_empty() {
-            if drv.editor.is_composing() {
-                drv.clear_compose();
-            } else {
-                drv.delete_selection();
-            }
-        } else {
-            // We always pass a cursor offset of 0 to `PlainEditor::set_compose`
-            // and then set the cursor using our own logic.
-            drv.set_compose(text, Some((0, 0)));
-        }
-        let range = drv
-            .editor
-            .raw_compose()
-            .clone()
-            .unwrap_or_else(|| drv.editor.raw_selection().text_range());
-        drop(drv);
-        let start_utf16 = self.editor.utf8_to_utf16_index(range.start);
-        let end_utf16 = self.editor.utf8_to_utf16_index(range.end);
-        let cursor_pos_utf16 = if new_cursor_position > 0 {
-            let len_utf16 = self
-                .editor
-                .utf8_to_utf16_index(self.editor.editor().raw_text().len());
-            end_utf16
-                .saturating_add((new_cursor_position - 1) as usize)
-                .min(len_utf16)
-        } else {
-            start_utf16.saturating_sub(-new_cursor_position as usize)
-        };
-        let cursor_pos = self.editor.utf16_to_utf8_index(cursor_pos_utf16);
-        let mut drv = self.editor.driver();
-        drv.move_to_byte(cursor_pos);
-        self.enqueue_render_if_needed(env, view);
+        self.set_composing_text_internal(text, new_cursor_position);
+        self.enqueue_render_if_needed(ctx);
         true
     }
 
-    fn set_composing_region<'local>(
-        &mut self,
-        env: &mut JNIEnv<'local>,
-        view: &View<'local>,
-        start: jint,
-        end: jint,
-    ) -> bool {
+    fn set_composing_region(&mut self, ctx: &mut CallbackCtx, start: jint, end: jint) -> bool {
         let start = start.max(0) as usize;
         let end = end.max(0) as usize;
         let len_utf16 = self
@@ -774,28 +739,28 @@ impl InputConnection for DemoViewPeer {
             let (start, end) = (start.min(end), end.max(start));
             drv.set_compose_byte_range(start, end);
         }
-        self.enqueue_render_if_needed(env, view);
+        self.enqueue_render_if_needed(ctx);
         true
     }
 
-    fn finish_composing_text<'local>(
-        &mut self,
-        env: &mut JNIEnv<'local>,
-        view: &View<'local>,
-    ) -> bool {
+    fn finish_composing_text(&mut self, ctx: &mut CallbackCtx) -> bool {
         let mut drv = self.editor.driver();
         drv.finish_compose();
-        self.enqueue_render_if_needed(env, view);
+        self.enqueue_render_if_needed(ctx);
         true
     }
 
-    fn set_selection<'local>(
+    fn commit_text(
         &mut self,
-        env: &mut JNIEnv<'local>,
-        view: &View<'local>,
-        start: jint,
-        end: jint,
+        ctx: &mut CallbackCtx,
+        text: &str,
+        new_cursor_position: jint,
     ) -> bool {
+        self.set_composing_text_internal(text, new_cursor_position);
+        self.finish_composing_text(ctx)
+    }
+
+    fn set_selection(&mut self, ctx: &mut CallbackCtx, start: jint, end: jint) -> bool {
         if start < 0 || end < 0 {
             return false;
         }
@@ -803,37 +768,28 @@ impl InputConnection for DemoViewPeer {
         let end = self.editor.utf16_to_utf8_index(end as _);
         let mut drv = self.editor.driver();
         drv.select_byte_range(start, end);
-        self.enqueue_render_if_needed(env, view);
+        self.enqueue_render_if_needed(ctx);
         true
     }
 
-    fn perform_editor_action<'local>(
-        &mut self,
-        _env: &mut JNIEnv<'local>,
-        _view: &View<'local>,
-        _editor_action: jint,
-    ) -> bool {
+    fn perform_editor_action(&mut self, _ctx: &mut CallbackCtx, _editor_action: jint) -> bool {
         // TODO: Do we need to implement this at all for this demo?
         // It would surely be needed for a proper framework implementation.
         false
     }
 
-    fn begin_batch_edit<'local>(
-        &mut self,
-        _env: &mut JNIEnv<'local>,
-        _view: &View<'local>,
-    ) -> bool {
+    fn begin_batch_edit(&mut self, _ctx: &mut CallbackCtx) -> bool {
         self.batch_edit_depth += 1;
         true
     }
 
-    fn end_batch_edit<'local>(&mut self, env: &mut JNIEnv<'local>, view: &View<'local>) -> bool {
+    fn end_batch_edit(&mut self, ctx: &mut CallbackCtx) -> bool {
         if self.batch_edit_depth == 0 {
             return false;
         }
         self.batch_edit_depth -= 1;
         if self.batch_edit_depth == 0 {
-            self.enqueue_render_if_needed(env, view);
+            self.enqueue_render_if_needed(ctx);
             false
         } else {
             true
@@ -842,21 +798,19 @@ impl InputConnection for DemoViewPeer {
 
     fn send_key_event<'local>(
         &mut self,
-        env: &mut JNIEnv<'local>,
-        view: &View<'local>,
+        ctx: &mut CallbackCtx<'local>,
         event: &KeyEvent<'local>,
     ) -> bool {
-        if event.action(env) != KeyAction::Down {
+        if event.action(&mut ctx.env) != KeyAction::Down {
             return false;
         }
-        let key_code = event.key_code(env);
-        self.on_key_down(env, view, key_code, event)
+        let key_code = event.key_code(&mut ctx.env);
+        self.on_key_down(ctx, key_code, event)
     }
 
-    fn request_cursor_updates<'local>(
+    fn request_cursor_updates(
         &mut self,
-        _env: &mut JNIEnv<'local>,
-        _view: &View<'local>,
+        _ctx: &mut CallbackCtx,
         _cursor_update_mode: jint,
     ) -> bool {
         // TODO: Do we need to implement this?
