@@ -217,8 +217,14 @@ pub trait InputConnection {
 
     fn finish_composing_text(&mut self, ctx: &mut CallbackCtx) -> bool;
 
-    fn commit_text(&mut self, ctx: &mut CallbackCtx, text: &str, new_cursor_position: jint)
-    -> bool;
+    fn commit_text(
+        &mut self,
+        ctx: &mut CallbackCtx,
+        text: &str,
+        new_cursor_position: jint,
+    ) -> bool {
+        self.set_composing_text(ctx, text, new_cursor_position) && self.finish_composing_text(ctx)
+    }
     // TODO: styled version
 
     // TODO: Do we need to bind commitCompletion or commitCoorrection?
