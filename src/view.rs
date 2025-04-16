@@ -279,7 +279,9 @@ where
         return default;
     };
     let mut ctx = CallbackCtx::new(env, view);
-    f(&mut ctx, &mut **peer)
+    let result = f(&mut ctx, &mut **peer);
+    ctx.finish();
+    result
 }
 
 fn with_peer<'local, F, T: Default>(env: JNIEnv<'local>, view: View<'local>, id: jlong, f: F) -> T
@@ -449,6 +451,7 @@ extern "system" fn on_detached_from_window<'local>(
     peer.on_detached_from_window(&mut ctx);
     ctx.view.remove_frame_callback(&mut ctx.env);
     ctx.view.remove_delayed_callbacks(&mut ctx.env);
+    ctx.finish();
 }
 
 extern "system" fn on_window_visibility_changed<'local>(
