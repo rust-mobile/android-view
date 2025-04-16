@@ -4,8 +4,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use accesskit::{ActionRequest, ActivationHandler, Node, Role, Tree, TreeUpdate};
-use accesskit_android::ActionHandlerWithAndroidContext;
+use accesskit::{ActionHandler, ActionRequest, ActivationHandler, Node, Role, Tree, TreeUpdate};
 use android_view::{
     jni::{
         JNIEnv, JavaVM,
@@ -113,27 +112,12 @@ impl ActivationHandler for EditorAccessTreeSource<'_> {
 
 struct EditorAccessActionHandler<'a> {
     editor: &'a mut text::Editor,
-    last_drawn_generation: &'a text::Generation,
-    render_surface: &'a Option<RenderSurface<'static>>,
 }
 
-impl ActionHandlerWithAndroidContext for EditorAccessActionHandler<'_> {
-    fn do_action<'local>(
-        &mut self,
-        env: &mut JNIEnv<'local>,
-        view: &JObject<'local>,
-        req: ActionRequest,
-    ) {
+impl ActionHandler for EditorAccessActionHandler<'_> {
+    fn do_action<'local>(&mut self, req: ActionRequest) {
         if req.target == TEXT_INPUT_ID {
             self.editor.handle_accesskit_action_request(&req);
-            if *self.last_drawn_generation != self.editor.generation()
-                && self.render_surface.is_some()
-            {
-                // TODO: Is there a way to refactor android-view's wrappers so
-                // we don't have to clone the local reference here?
-                let view = View(env.new_local_ref(view).unwrap());
-                view.post_frame_callback(env);
-            }
         }
     }
 }
@@ -493,22 +477,22 @@ impl ViewPeer for DemoViewPeer {
 
     fn input_focus<'local>(
         &mut self,
-        env: &mut JNIEnv<'local>,
-        view: &View<'local>,
+        _env: &mut JNIEnv<'local>,
+        _view: &View<'local>,
     ) -> PeerResult<'local, jint> {
         let mut tree_source = EditorAccessTreeSource {
             render_surface: &self.render_surface,
             editor: &mut self.editor,
         };
         self.access_adapter
-            .input_focus(&mut tree_source, env, &view.0)
+            .input_focus(&mut tree_source)
             .into()
     }
 
     fn virtual_view_at_point<'local>(
         &mut self,
-        env: &mut JNIEnv<'local>,
-        view: &View<'local>,
+        _env: &mut JNIEnv<'local>,
+        _view: &View<'local>,
         x: jfloat,
         y: jfloat,
     ) -> PeerResult<'local, jint> {
@@ -517,7 +501,7 @@ impl ViewPeer for DemoViewPeer {
             editor: &mut self.editor,
         };
         self.access_adapter
-            .virtual_view_at_point(&mut tree_source, env, &view.0, x, y)
+            .virtual_view_at_point(&mut tree_source, x, y)
             .into()
     }
 
@@ -529,13 +513,17 @@ impl ViewPeer for DemoViewPeer {
         action: jint,
     ) -> PeerResult<'local, bool> {
         let mut action_handler = EditorAccessActionHandler {
-            render_surface: &self.render_surface,
             editor: &mut self.editor,
-            last_drawn_generation: &self.last_drawn_generation,
         };
-        self.access_adapter
-            .perform_action(&mut action_handler, env, &view.0, virtual_view_id, action)
-            .into()
+        if !self.access_adapter.perform_action(
+            &mut action_handler,
+            virtual_view_id,
+            action,
+        ) {
+            return false.into();
+        }
+        self.enqueue_render_if_needed(env, view);
+        true.into()
     }
 
     fn accessibility_set_text_selection<'local>(
@@ -547,22 +535,22 @@ impl ViewPeer for DemoViewPeer {
         focus: jint,
     ) -> PeerResult<'local, bool> {
         let mut action_handler = EditorAccessActionHandler {
-            render_surface: &self.render_surface,
             editor: &mut self.editor,
-            last_drawn_generation: &self.last_drawn_generation,
         };
         let view_class = env.get_object_class(&view.0).unwrap();
-        self.access_adapter
-            .set_text_selection(
-                &mut action_handler,
-                env,
-                &view_class,
-                &view.0,
-                virtual_view_id,
-                anchor,
-                focus,
-            )
-            .into()
+        if !self.access_adapter.set_text_selection(
+            &mut action_handler,
+            env,
+            &view_class,
+            &view.0,
+            virtual_view_id,
+            anchor,
+            focus,
+        ) {
+            return false.into();
+        }
+        self.enqueue_render_if_needed(env, view);
+        true.into()
     }
 
     fn accessibility_collapse_text_selection<'local>(
@@ -572,20 +560,20 @@ impl ViewPeer for DemoViewPeer {
         virtual_view_id: jint,
     ) -> PeerResult<'local, bool> {
         let mut action_handler = EditorAccessActionHandler {
-            render_surface: &self.render_surface,
             editor: &mut self.editor,
-            last_drawn_generation: &self.last_drawn_generation,
         };
         let view_class = env.get_object_class(&view.0).unwrap();
-        self.access_adapter
-            .collapse_text_selection(
-                &mut action_handler,
-                env,
-                &view_class,
-                &view.0,
-                virtual_view_id,
-            )
-            .into()
+        if !self.access_adapter.collapse_text_selection(
+            &mut action_handler,
+            env,
+            &view_class,
+            &view.0,
+            virtual_view_id,
+        ) {
+            return false.into();
+        }
+        self.enqueue_render_if_needed(env, view);
+        true.into()
     }
 
     fn accessibility_traverse_text<'local>(
@@ -598,23 +586,23 @@ impl ViewPeer for DemoViewPeer {
         extend_selection: bool,
     ) -> PeerResult<'local, bool> {
         let mut action_handler = EditorAccessActionHandler {
-            render_surface: &self.render_surface,
             editor: &mut self.editor,
-            last_drawn_generation: &self.last_drawn_generation,
         };
         let view_class = env.get_object_class(&view.0).unwrap();
-        self.access_adapter
-            .traverse_text(
-                &mut action_handler,
-                env,
-                &view_class,
-                &view.0,
-                virtual_view_id,
-                granularity,
-                forward,
-                extend_selection,
-            )
-            .into()
+        if !self.access_adapter.traverse_text(
+            &mut action_handler,
+            env,
+            &view_class,
+            &view.0,
+            virtual_view_id,
+            granularity,
+            forward,
+            extend_selection,
+        ) {
+            return false.into();
+        }
+        self.enqueue_render_if_needed(env, view);
+        true.into()
     }
 
     fn on_create_input_connection<'local>(

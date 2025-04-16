@@ -5,12 +5,12 @@ version = 4
 [[package]]
 name = "accesskit"
 version = "0.18.0"
-source = "git+https://github.com/AccessKit/accesskit?branch=android-extended-handlers#4c06ab6d294cbb813760f25c291305bd5a1064ce"
+source = "git+https://github.com/AccessKit/accesskit?branch=fix-android-after-drop-frozen-node#436eb9c57c2b7824f1798d150377058bf49a45d2"
 
 [[package]]
 name = "accesskit_android"
 version = "0.1.1"
-source = "git+https://github.com/AccessKit/accesskit?branch=android-extended-handlers#4c06ab6d294cbb813760f25c291305bd5a1064ce"
+source = "git+https://github.com/AccessKit/accesskit?branch=fix-android-after-drop-frozen-node#436eb9c57c2b7824f1798d150377058bf49a45d2"
 dependencies = [
  "accesskit",
  "accesskit_consumer",
@@ -22,7 +22,7 @@ dependencies = [
 [[package]]
 name = "accesskit_consumer"
 version = "0.27.0"
-source = "git+https://github.com/AccessKit/accesskit?branch=android-extended-handlers#4c06ab6d294cbb813760f25c291305bd5a1064ce"
+source = "git+https://github.com/AccessKit/accesskit?branch=fix-android-after-drop-frozen-node#436eb9c57c2b7824f1798d150377058bf49a45d2"
 dependencies = [
  "accesskit",
  "hashbrown",
