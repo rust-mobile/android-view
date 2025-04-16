@@ -228,7 +228,6 @@ impl DemoViewPeer {
             );
 
             if self.ime_active {
-                let imm = ctx.view.input_method_manager(&mut ctx.env);
                 let selection = self.editor.editor().raw_selection().text_range();
                 let sel_start = self.editor.utf8_to_utf16_index(selection.start) as jint;
                 let sel_end = self.editor.utf8_to_utf16_index(selection.end) as jint;
@@ -240,14 +239,10 @@ impl DemoViewPeer {
                 } else {
                     (-1, -1)
                 };
-                imm.update_selection(
-                    &mut ctx.env,
-                    &ctx.view,
-                    sel_start,
-                    sel_end,
-                    comp_start,
-                    comp_end,
-                );
+                ctx.push_dynamic_deferred_callback(move |env, view| {
+                    let imm = view.input_method_manager(env);
+                    imm.update_selection(env, view, sel_start, sel_end, comp_start, comp_end);
+                });
             }
         }
 
