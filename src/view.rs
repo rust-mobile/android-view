@@ -2,7 +2,7 @@ use jni::{
     JNIEnv, NativeMethod,
     descriptors::Desc,
     objects::{JClass, JIntArray, JObject},
-    sys::{JNI_TRUE, jboolean, jfloat, jint, jlong},
+    sys::{JNI_FALSE, JNI_TRUE, jboolean, jfloat, jint, jlong},
 };
 use ndk::event::Keycode;
 use num_enum::FromPrimitive;
@@ -15,9 +15,7 @@ use std::{
     },
 };
 
-use crate::{
-    binder::*, context::*, events::*, graphics::*, ime::*, peer_result::*, surface::*, util::*,
-};
+use crate::{binder::*, context::*, events::*, graphics::*, ime::*, surface::*};
 
 #[repr(transparent)]
 pub struct View<'local>(pub JObject<'local>);
@@ -89,8 +87,8 @@ pub trait ViewPeer: Send {
         view: &View<'local>,
         width_spec: jint,
         height_spec: jint,
-    ) -> PeerResult<'local, Option<(jint, jint)>> {
-        None.into()
+    ) -> Option<(jint, jint)> {
+        None
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -103,8 +101,7 @@ pub trait ViewPeer: Send {
         top: jint,
         right: jint,
         bottom: jint,
-    ) -> PeerResult<'local, ()> {
-        ().into()
+    ) {
     }
 
     fn on_size_changed<'local>(
@@ -115,8 +112,7 @@ pub trait ViewPeer: Send {
         h: jint,
         oldw: jint,
         oldh: jint,
-    ) -> PeerResult<'local, ()> {
-        ().into()
+    ) {
     }
 
     fn on_key_down<'local>(
@@ -125,8 +121,8 @@ pub trait ViewPeer: Send {
         view: &View<'local>,
         key_code: Keycode,
         event: &KeyEvent<'local>,
-    ) -> PeerResult<'local, bool> {
-        false.into()
+    ) -> bool {
+        false
     }
 
     fn on_key_up<'local>(
@@ -135,8 +131,8 @@ pub trait ViewPeer: Send {
         view: &View<'local>,
         key_code: Keycode,
         event: &KeyEvent<'local>,
-    ) -> PeerResult<'local, bool> {
-        false.into()
+    ) -> bool {
+        false
     }
 
     fn on_trackball_event<'local>(
@@ -144,8 +140,8 @@ pub trait ViewPeer: Send {
         env: &mut JNIEnv<'local>,
         view: &View<'local>,
         event: &MotionEvent<'local>,
-    ) -> PeerResult<'local, bool> {
-        false.into()
+    ) -> bool {
+        false
     }
 
     fn on_touch_event<'local>(
@@ -153,8 +149,8 @@ pub trait ViewPeer: Send {
         env: &mut JNIEnv<'local>,
         view: &View<'local>,
         event: &MotionEvent<'local>,
-    ) -> PeerResult<'local, bool> {
-        false.into()
+    ) -> bool {
+        false
     }
 
     fn on_generic_motion_event<'local>(
@@ -162,8 +158,8 @@ pub trait ViewPeer: Send {
         env: &mut JNIEnv<'local>,
         view: &View<'local>,
         event: &MotionEvent<'local>,
-    ) -> PeerResult<'local, bool> {
-        false.into()
+    ) -> bool {
+        false
     }
 
     fn on_focus_changed<'local>(
@@ -173,8 +169,7 @@ pub trait ViewPeer: Send {
         gain_focus: bool,
         direction: jint,
         previously_focused_rect: Option<&Rect<'local>>,
-    ) -> PeerResult<'local, ()> {
-        ().into()
+    ) {
     }
 
     fn on_window_focus_changed<'local>(
@@ -182,33 +177,19 @@ pub trait ViewPeer: Send {
         env: &mut JNIEnv<'local>,
         view: &View<'local>,
         has_window_focus: bool,
-    ) -> PeerResult<'local, ()> {
-        ().into()
+    ) {
     }
 
-    fn on_attached_to_window<'local>(
-        &mut self,
-        env: &mut JNIEnv<'local>,
-        view: &View<'local>,
-    ) -> PeerResult<'local, ()> {
-        ().into()
-    }
+    fn on_attached_to_window<'local>(&mut self, env: &mut JNIEnv<'local>, view: &View<'local>) {}
 
-    fn on_detached_from_window<'local>(
-        &mut self,
-        env: &mut JNIEnv<'local>,
-        view: &View<'local>,
-    ) -> PeerResult<'local, ()> {
-        ().into()
-    }
+    fn on_detached_from_window<'local>(&mut self, env: &mut JNIEnv<'local>, view: &View<'local>) {}
 
     fn on_window_visibility_changed<'local>(
         &mut self,
         env: &mut JNIEnv<'local>,
         view: &View<'local>,
         visibility: jint,
-    ) -> PeerResult<'local, ()> {
-        ().into()
+    ) {
     }
 
     fn surface_created<'local>(
@@ -216,8 +197,7 @@ pub trait ViewPeer: Send {
         env: &mut JNIEnv<'local>,
         view: &View<'local>,
         holder: &SurfaceHolder<'local>,
-    ) -> PeerResult<'local, ()> {
-        ().into()
+    ) {
     }
 
     fn surface_changed<'local>(
@@ -228,8 +208,7 @@ pub trait ViewPeer: Send {
         format: jint,
         width: jint,
         height: jint,
-    ) -> PeerResult<'local, ()> {
-        ().into()
+    ) {
     }
 
     fn surface_destroyed<'local>(
@@ -237,8 +216,7 @@ pub trait ViewPeer: Send {
         env: &mut JNIEnv<'local>,
         view: &View<'local>,
         holder: &SurfaceHolder<'local>,
-    ) -> PeerResult<'local, ()> {
-        ().into()
+    ) {
     }
 
     fn do_frame<'local>(
@@ -246,17 +224,10 @@ pub trait ViewPeer: Send {
         env: &mut JNIEnv<'local>,
         view: &View<'local>,
         frame_time_nanos: jlong,
-    ) -> PeerResult<'local, ()> {
-        ().into()
+    ) {
     }
 
-    fn delayed_callback<'local>(
-        &mut self,
-        env: &mut JNIEnv<'local>,
-        view: &View<'local>,
-    ) -> PeerResult<'local, ()> {
-        ().into()
-    }
+    fn delayed_callback<'local>(&mut self, env: &mut JNIEnv<'local>, view: &View<'local>) {}
 
     fn populate_accessibility_node_info<'local>(
         &mut self,
@@ -266,16 +237,12 @@ pub trait ViewPeer: Send {
         host_screen_y: jint,
         virtual_view_id: jint,
         node_info: &JObject<'local>,
-    ) -> PeerResult<'local, bool> {
-        false.into()
+    ) -> bool {
+        false
     }
 
-    fn input_focus<'local>(
-        &mut self,
-        env: &mut JNIEnv<'local>,
-        view: &View<'local>,
-    ) -> PeerResult<'local, jint> {
-        (-1).into()
+    fn input_focus<'local>(&mut self, env: &mut JNIEnv<'local>, view: &View<'local>) -> jint {
+        -1
     }
 
     fn virtual_view_at_point<'local>(
@@ -284,8 +251,8 @@ pub trait ViewPeer: Send {
         view: &View<'local>,
         x: jfloat,
         y: jfloat,
-    ) -> PeerResult<'local, jint> {
-        (-1).into()
+    ) -> jint {
+        -1
     }
 
     fn perform_accessibility_action<'local>(
@@ -294,8 +261,8 @@ pub trait ViewPeer: Send {
         view: &View<'local>,
         virtual_view_id: jint,
         action: jint,
-    ) -> PeerResult<'local, bool> {
-        false.into()
+    ) -> bool {
+        false
     }
 
     fn accessibility_set_text_selection<'local>(
@@ -305,8 +272,8 @@ pub trait ViewPeer: Send {
         virtual_view_id: jint,
         anchor: jint,
         focus: jint,
-    ) -> PeerResult<'local, bool> {
-        false.into()
+    ) -> bool {
+        false
     }
 
     fn accessibility_collapse_text_selection<'local>(
@@ -314,8 +281,8 @@ pub trait ViewPeer: Send {
         env: &mut JNIEnv<'local>,
         view: &View<'local>,
         virtual_view_id: jint,
-    ) -> PeerResult<'local, bool> {
-        false.into()
+    ) -> bool {
+        false
     }
 
     fn accessibility_traverse_text<'local>(
@@ -326,8 +293,8 @@ pub trait ViewPeer: Send {
         granularity: jint,
         forward: bool,
         extend_selection: bool,
-    ) -> PeerResult<'local, bool> {
-        false.into()
+    ) -> bool {
+        false
     }
 
     fn on_create_input_connection<'local>(
@@ -335,8 +302,8 @@ pub trait ViewPeer: Send {
         env: &mut JNIEnv<'local>,
         view: &View<'local>,
         out_attrs: &EditorInfo<'local>,
-    ) -> PeerResult<'local, bool> {
-        false.into()
+    ) -> bool {
+        false
     }
 
     fn as_input_connection(&mut self) -> &mut dyn InputConnection {
@@ -347,35 +314,22 @@ pub trait ViewPeer: Send {
 static NEXT_PEER_ID: AtomicI64 = AtomicI64::new(0);
 static PEER_MAP: Mutex<BTreeMap<jlong, Box<dyn ViewPeer>>> = Mutex::new(BTreeMap::new());
 
-pub(crate) fn with_peer_and_default<'local, F, T>(
-    env: &mut JNIEnv<'local>,
-    view: &View<'local>,
-    id: jlong,
-    default: T,
-    f: F,
-) -> T
+pub(crate) fn with_peer_and_default<F, T>(id: jlong, default: T, f: F) -> T
 where
-    F: FnOnce(&mut JNIEnv<'local>, &View<'local>, &mut dyn ViewPeer) -> PeerResult<'local, T>,
+    F: FnOnce(&mut dyn ViewPeer) -> T,
 {
     let mut map = PEER_MAP.lock().unwrap();
     let Some(peer) = map.get_mut(&id) else {
         return default;
     };
-    let result = f(env, view, &mut **peer);
-    drop(map);
-    result.finish(env, view)
+    f(&mut **peer)
 }
 
-fn with_peer<'local, F, T: Default>(
-    env: &mut JNIEnv<'local>,
-    view: &View<'local>,
-    id: jlong,
-    f: F,
-) -> T
+fn with_peer<F, T: Default>(id: jlong, f: F) -> T
 where
-    F: FnOnce(&mut JNIEnv<'local>, &View<'local>, &mut dyn ViewPeer) -> PeerResult<'local, T>,
+    F: FnOnce(&mut dyn ViewPeer) -> T,
 {
-    with_peer_and_default(env, view, id, T::default(), f)
+    with_peer_and_default(id, T::default(), f)
 }
 
 extern "system" fn on_measure<'local>(
@@ -385,16 +339,16 @@ extern "system" fn on_measure<'local>(
     width_spec: jint,
     height_spec: jint,
 ) -> JIntArray<'local> {
-    if let Some((width, height)) = with_peer(&mut env, &view, peer, |env, view, peer| {
-        peer.on_measure(env, view, width_spec, height_spec)
-    }) {
-        let result = env.new_int_array(2).unwrap();
-        env.set_int_array_region(&result, 0, &[width, height])
-            .unwrap();
-        result
-    } else {
-        JObject::null().into()
-    }
+    with_peer(peer, |peer| {
+        if let Some((width, height)) = peer.on_measure(&mut env, &view, width_spec, height_spec) {
+            let result = env.new_int_array(2).unwrap();
+            env.set_int_array_region(&result, 0, &[width, height])
+                .unwrap();
+            result
+        } else {
+            JObject::null().into()
+        }
+    })
 }
 
 extern "system" fn on_layout<'local>(
@@ -407,8 +361,16 @@ extern "system" fn on_layout<'local>(
     right: jint,
     bottom: jint,
 ) {
-    with_peer(&mut env, &view, peer, |env, view, peer| {
-        peer.on_layout(env, view, changed == JNI_TRUE, left, top, right, bottom)
+    with_peer(peer, |peer| {
+        peer.on_layout(
+            &mut env,
+            &view,
+            changed == JNI_TRUE,
+            left,
+            top,
+            right,
+            bottom,
+        );
     })
 }
 
@@ -421,9 +383,13 @@ extern "system" fn on_size_changed<'local>(
     oldw: jint,
     oldh: jint,
 ) {
-    with_peer(&mut env, &view, peer, |env, view, peer| {
-        peer.on_size_changed(env, view, w, h, oldw, oldh)
+    with_peer(peer, |peer| {
+        peer.on_size_changed(&mut env, &view, w, h, oldw, oldh);
     })
+}
+
+fn to_jboolean(flag: bool) -> jboolean {
+    if flag { JNI_TRUE } else { JNI_FALSE }
 }
 
 extern "system" fn on_key_down<'local>(
@@ -433,9 +399,9 @@ extern "system" fn on_key_down<'local>(
     key_code: jint,
     event: KeyEvent<'local>,
 ) -> jboolean {
-    to_jboolean(with_peer(&mut env, &view, peer, |env, view, peer| {
-        peer.on_key_down(env, view, Keycode::from_primitive(key_code), &event)
-    }))
+    with_peer(peer, |peer| {
+        to_jboolean(peer.on_key_down(&mut env, &view, Keycode::from_primitive(key_code), &event))
+    })
 }
 
 extern "system" fn on_key_up<'local>(
@@ -445,9 +411,9 @@ extern "system" fn on_key_up<'local>(
     key_code: jint,
     event: KeyEvent<'local>,
 ) -> jboolean {
-    to_jboolean(with_peer(&mut env, &view, peer, |env, view, peer| {
-        peer.on_key_up(env, view, Keycode::from_primitive(key_code), &event)
-    }))
+    with_peer(peer, |peer| {
+        to_jboolean(peer.on_key_up(&mut env, &view, Keycode::from_primitive(key_code), &event))
+    })
 }
 
 extern "system" fn on_trackball_event<'local>(
@@ -456,9 +422,9 @@ extern "system" fn on_trackball_event<'local>(
     peer: jlong,
     event: MotionEvent<'local>,
 ) -> jboolean {
-    to_jboolean(with_peer(&mut env, &view, peer, |env, view, peer| {
-        peer.on_trackball_event(env, view, &event)
-    }))
+    with_peer(peer, |peer| {
+        to_jboolean(peer.on_trackball_event(&mut env, &view, &event))
+    })
 }
 
 extern "system" fn on_touch_event<'local>(
@@ -467,9 +433,9 @@ extern "system" fn on_touch_event<'local>(
     peer: jlong,
     event: MotionEvent<'local>,
 ) -> jboolean {
-    to_jboolean(with_peer(&mut env, &view, peer, |env, view, peer| {
-        peer.on_touch_event(env, view, &event)
-    }))
+    with_peer(peer, |peer| {
+        to_jboolean(peer.on_touch_event(&mut env, &view, &event))
+    })
 }
 
 extern "system" fn on_generic_motion_event<'local>(
@@ -478,9 +444,9 @@ extern "system" fn on_generic_motion_event<'local>(
     peer: jlong,
     event: MotionEvent<'local>,
 ) -> jboolean {
-    to_jboolean(with_peer(&mut env, &view, peer, |env, view, peer| {
-        peer.on_generic_motion_event(env, view, &event)
-    }))
+    with_peer(peer, |peer| {
+        to_jboolean(peer.on_generic_motion_event(&mut env, &view, &event))
+    })
 }
 
 extern "system" fn on_focus_changed<'local>(
@@ -491,14 +457,14 @@ extern "system" fn on_focus_changed<'local>(
     direction: jint,
     previously_focused_rect: Rect<'local>,
 ) {
-    with_peer(&mut env, &view, peer, |env, view, peer| {
+    with_peer(peer, |peer| {
         peer.on_focus_changed(
-            env,
-            view,
+            &mut env,
+            &view,
             gain_focus == JNI_TRUE,
             direction,
             (!previously_focused_rect.0.as_raw().is_null()).then_some(&previously_focused_rect),
-        )
+        );
     })
 }
 
@@ -508,8 +474,8 @@ extern "system" fn on_window_focus_changed<'local>(
     peer: jlong,
     has_window_focus: jboolean,
 ) {
-    with_peer(&mut env, &view, peer, |env, view, peer| {
-        peer.on_window_focus_changed(env, view, has_window_focus == JNI_TRUE)
+    with_peer(peer, |peer| {
+        peer.on_window_focus_changed(&mut env, &view, has_window_focus == JNI_TRUE);
     })
 }
 
@@ -518,8 +484,8 @@ extern "system" fn on_attached_to_window<'local>(
     view: View<'local>,
     peer: jlong,
 ) {
-    with_peer(&mut env, &view, peer, |env, view, peer| {
-        peer.on_attached_to_window(env, view)
+    with_peer(peer, |peer| {
+        peer.on_attached_to_window(&mut env, &view);
     })
 }
 
@@ -530,9 +496,7 @@ extern "system" fn on_detached_from_window<'local>(
 ) {
     let mut map = PEER_MAP.lock().unwrap();
     let mut peer = map.remove(&peer).unwrap();
-    let result = peer.on_detached_from_window(&mut env, &view);
-    drop(map);
-    result.finish(&mut env, &view);
+    peer.on_detached_from_window(&mut env, &view);
     view.remove_frame_callback(&mut env);
     view.remove_delayed_callbacks(&mut env);
 }
@@ -543,8 +507,8 @@ extern "system" fn on_window_visibility_changed<'local>(
     peer: jlong,
     visibility: jint,
 ) {
-    with_peer(&mut env, &view, peer, |env, view, peer| {
-        peer.on_window_visibility_changed(env, view, visibility)
+    with_peer(peer, |peer| {
+        peer.on_window_visibility_changed(&mut env, &view, visibility);
     })
 }
 
@@ -554,8 +518,8 @@ extern "system" fn surface_created<'local>(
     peer: jlong,
     holder: SurfaceHolder<'local>,
 ) {
-    with_peer(&mut env, &view, peer, |env, view, peer| {
-        peer.surface_created(env, view, &holder)
+    with_peer(peer, |peer| {
+        peer.surface_created(&mut env, &view, &holder);
     })
 }
 
@@ -568,8 +532,8 @@ extern "system" fn surface_changed<'local>(
     width: jint,
     height: jint,
 ) {
-    with_peer(&mut env, &view, peer, |env, view, peer| {
-        peer.surface_changed(env, view, &holder, format, width, height)
+    with_peer(peer, |peer| {
+        peer.surface_changed(&mut env, &view, &holder, format, width, height);
     })
 }
 
@@ -579,8 +543,8 @@ extern "system" fn surface_destroyed<'local>(
     peer: jlong,
     holder: SurfaceHolder<'local>,
 ) {
-    with_peer(&mut env, &view, peer, |env, view, peer| {
-        peer.surface_destroyed(env, view, &holder)
+    with_peer(peer, |peer| {
+        peer.surface_destroyed(&mut env, &view, &holder);
     })
 }
 
@@ -590,8 +554,8 @@ extern "system" fn do_frame<'local>(
     peer: jlong,
     frame_time_nanos: jlong,
 ) {
-    with_peer(&mut env, &view, peer, |env, view, peer| {
-        peer.do_frame(env, view, frame_time_nanos)
+    with_peer(peer, |peer| {
+        peer.do_frame(&mut env, &view, frame_time_nanos);
     })
 }
 
@@ -600,8 +564,8 @@ extern "system" fn delayed_callback<'local>(
     view: View<'local>,
     peer: jlong,
 ) {
-    with_peer(&mut env, &view, peer, |env, view, peer| {
-        peer.delayed_callback(env, view)
+    with_peer(peer, |peer| {
+        peer.delayed_callback(&mut env, &view);
     })
 }
 
@@ -614,16 +578,20 @@ extern "system" fn populate_accessibility_node_info<'local>(
     virtual_view_id: jint,
     node_info: JObject<'local>,
 ) -> jboolean {
-    to_jboolean(with_peer(&mut env, &view, peer, |env, view, peer| {
-        peer.populate_accessibility_node_info(
-            env,
-            view,
+    with_peer(peer, |peer| {
+        if peer.populate_accessibility_node_info(
+            &mut env,
+            &view,
             host_screen_x,
             host_screen_y,
             virtual_view_id,
             &node_info,
-        )
-    }))
+        ) {
+            JNI_TRUE
+        } else {
+            JNI_FALSE
+        }
+    })
 }
 
 extern "system" fn get_input_focus<'local>(
@@ -631,9 +599,7 @@ extern "system" fn get_input_focus<'local>(
     view: View<'local>,
     peer: jlong,
 ) -> jint {
-    with_peer_and_default(&mut env, &view, peer, -1, |env, view, peer| {
-        peer.input_focus(env, view)
-    })
+    with_peer_and_default(peer, -1, |peer| peer.input_focus(&mut env, &view))
 }
 
 extern "system" fn get_virtual_view_at_point<'local>(
@@ -643,8 +609,8 @@ extern "system" fn get_virtual_view_at_point<'local>(
     x: jfloat,
     y: jfloat,
 ) -> jint {
-    with_peer_and_default(&mut env, &view, peer, -1, |env, view, peer| {
-        peer.virtual_view_at_point(env, view, x, y)
+    with_peer_and_default(peer, -1, |peer| {
+        peer.virtual_view_at_point(&mut env, &view, x, y)
     })
 }
 
@@ -655,9 +621,13 @@ extern "system" fn perform_accessibility_action<'local>(
     virtual_view_id: jint,
     action: jint,
 ) -> jboolean {
-    to_jboolean(with_peer(&mut env, &view, peer, |env, view, peer| {
-        peer.perform_accessibility_action(env, view, virtual_view_id, action)
-    }))
+    with_peer(peer, |peer| {
+        if peer.perform_accessibility_action(&mut env, &view, virtual_view_id, action) {
+            JNI_TRUE
+        } else {
+            JNI_FALSE
+        }
+    })
 }
 
 extern "system" fn accessibility_set_text_selection<'local>(
@@ -668,9 +638,13 @@ extern "system" fn accessibility_set_text_selection<'local>(
     anchor: jint,
     focus: jint,
 ) -> jboolean {
-    to_jboolean(with_peer(&mut env, &view, peer, |env, view, peer| {
-        peer.accessibility_set_text_selection(env, view, virtual_view_id, anchor, focus)
-    }))
+    with_peer(peer, |peer| {
+        if peer.accessibility_set_text_selection(&mut env, &view, virtual_view_id, anchor, focus) {
+            JNI_TRUE
+        } else {
+            JNI_FALSE
+        }
+    })
 }
 
 extern "system" fn accessibility_collapse_text_selection<'local>(
@@ -679,9 +653,13 @@ extern "system" fn accessibility_collapse_text_selection<'local>(
     peer: jlong,
     virtual_view_id: jint,
 ) -> jboolean {
-    to_jboolean(with_peer(&mut env, &view, peer, |env, view, peer| {
-        peer.accessibility_collapse_text_selection(env, view, virtual_view_id)
-    }))
+    with_peer(peer, |peer| {
+        if peer.accessibility_collapse_text_selection(&mut env, &view, virtual_view_id) {
+            JNI_TRUE
+        } else {
+            JNI_FALSE
+        }
+    })
 }
 
 extern "system" fn accessibility_traverse_text<'local>(
@@ -693,16 +671,20 @@ extern "system" fn accessibility_traverse_text<'local>(
     forward: jboolean,
     extend_selection: jboolean,
 ) -> jboolean {
-    to_jboolean(with_peer(&mut env, &view, peer, |env, view, peer| {
-        peer.accessibility_traverse_text(
-            env,
-            view,
+    with_peer(peer, |peer| {
+        if peer.accessibility_traverse_text(
+            &mut env,
+            &view,
             virtual_view_id,
             granularity,
             forward == JNI_TRUE,
             extend_selection == JNI_TRUE,
-        )
-    }))
+        ) {
+            JNI_TRUE
+        } else {
+            JNI_FALSE
+        }
+    })
 }
 
 extern "system" fn on_create_input_connection<'local>(
@@ -711,9 +693,13 @@ extern "system" fn on_create_input_connection<'local>(
     peer: jlong,
     out_attrs: EditorInfo<'local>,
 ) -> jboolean {
-    to_jboolean(with_peer(&mut env, &view, peer, |env, view, peer| {
-        peer.on_create_input_connection(env, view, &out_attrs)
-    }))
+    with_peer(peer, |peer| {
+        if peer.on_create_input_connection(&mut env, &view, &out_attrs) {
+            JNI_TRUE
+        } else {
+            JNI_FALSE
+        }
+    })
 }
 
 pub fn register_view_peer(peer: impl 'static + ViewPeer) -> jlong {
