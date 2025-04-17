@@ -5,6 +5,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use accesskit::{ActionHandler, ActionRequest, ActivationHandler, Node, Role, Tree, TreeUpdate};
+use accesskit_android::QueuedEvents;
 use android_view::{
     jni::{
         JNIEnv, JavaVM,
@@ -206,26 +207,25 @@ impl DemoViewPeer {
 
             self.last_drawn_generation = self.editor.draw(&mut self.scene);
 
-            let view_class = ctx.env.get_object_class(&ctx.view.0).unwrap();
             let mut tree_source = EditorAccessTreeSource {
                 render_surface: &self.render_surface,
                 editor: &mut self.editor,
             };
-            self.access_adapter.update_if_active(
-                || {
-                    let mut update = TreeUpdate {
-                        nodes: vec![],
-                        tree: None,
-                        focus: TEXT_INPUT_ID,
-                    };
-                    let node = tree_source.build_text_input_node(&mut update);
-                    update.nodes.push((TEXT_INPUT_ID, node));
-                    update
-                },
-                &mut ctx.env,
-                &view_class,
-                &ctx.view.0,
-            );
+            if let Some(events) = self.access_adapter.update_if_active(|| {
+                let mut update = TreeUpdate {
+                    nodes: vec![],
+                    tree: None,
+                    focus: TEXT_INPUT_ID,
+                };
+                let node = tree_source.build_text_input_node(&mut update);
+                update.nodes.push((TEXT_INPUT_ID, node));
+                update
+            }) {
+                ctx.push_dynamic_deferred_callback(move |env, view| {
+                    let view_class = env.get_object_class(&view.0).unwrap();
+                    events.raise(env, &view_class, &view.0);
+                });
+            }
 
             if self.ime_active {
                 let selection = self.editor.editor().raw_selection().text_range();
@@ -304,6 +304,29 @@ impl DemoViewPeer {
         let cursor_pos = self.editor.utf16_to_utf8_index(cursor_pos_utf16);
         let mut drv = self.editor.driver();
         drv.move_to_byte(cursor_pos);
+    }
+
+    fn access_action(
+        &mut self,
+        ctx: &mut CallbackCtx,
+        f: impl FnOnce(
+            &mut accesskit_android::Adapter,
+            &mut EditorAccessActionHandler,
+        ) -> Option<QueuedEvents>,
+    ) -> bool {
+        let mut action_handler = EditorAccessActionHandler {
+            editor: &mut self.editor,
+        };
+        if let Some(events) = f(&mut self.access_adapter, &mut action_handler) {
+            ctx.push_dynamic_deferred_callback(move |env, view| {
+                let view_class = env.get_object_class(&view.0).unwrap();
+                events.raise(env, &view_class, &view.0);
+            });
+            self.enqueue_render_if_needed(ctx);
+            true
+        } else {
+            false
+        }
     }
 }
 
@@ -456,17 +479,9 @@ impl ViewPeer for DemoViewPeer {
         virtual_view_id: jint,
         action: jint,
     ) -> bool {
-        let mut action_handler = EditorAccessActionHandler {
-            editor: &mut self.editor,
-        };
-        if !self
-            .access_adapter
-            .perform_action(&mut action_handler, virtual_view_id, action)
-        {
-            return false;
-        }
-        self.enqueue_render_if_needed(ctx);
-        true
+        self.access_action(ctx, move |adapter, action_handler| {
+            adapter.perform_action(action_handler, virtual_view_id, action)
+        })
     }
 
     fn accessibility_set_text_selection(
@@ -476,23 +491,9 @@ impl ViewPeer for DemoViewPeer {
         anchor: jint,
         focus: jint,
     ) -> bool {
-        let mut action_handler = EditorAccessActionHandler {
-            editor: &mut self.editor,
-        };
-        let view_class = ctx.env.get_object_class(&ctx.view.0).unwrap();
-        if !self.access_adapter.set_text_selection(
-            &mut action_handler,
-            &mut ctx.env,
-            &view_class,
-            &ctx.view.0,
-            virtual_view_id,
-            anchor,
-            focus,
-        ) {
-            return false;
-        }
-        self.enqueue_render_if_needed(ctx);
-        true
+        self.access_action(ctx, move |adapter, action_handler| {
+            adapter.set_text_selection(action_handler, virtual_view_id, anchor, focus)
+        })
     }
 
     fn accessibility_collapse_text_selection(
@@ -500,21 +501,9 @@ impl ViewPeer for DemoViewPeer {
         ctx: &mut CallbackCtx,
         virtual_view_id: jint,
     ) -> bool {
-        let mut action_handler = EditorAccessActionHandler {
-            editor: &mut self.editor,
-        };
-        let view_class = ctx.env.get_object_class(&ctx.view.0).unwrap();
-        if !self.access_adapter.collapse_text_selection(
-            &mut action_handler,
-            &mut ctx.env,
-            &view_class,
-            &ctx.view.0,
-            virtual_view_id,
-        ) {
-            return false;
-        }
-        self.enqueue_render_if_needed(ctx);
-        true
+        self.access_action(ctx, move |adapter, action_handler| {
+            adapter.collapse_text_selection(action_handler, virtual_view_id)
+        })
     }
 
     fn accessibility_traverse_text(
@@ -525,24 +514,15 @@ impl ViewPeer for DemoViewPeer {
         forward: bool,
         extend_selection: bool,
     ) -> bool {
-        let mut action_handler = EditorAccessActionHandler {
-            editor: &mut self.editor,
-        };
-        let view_class = ctx.env.get_object_class(&ctx.view.0).unwrap();
-        if !self.access_adapter.traverse_text(
-            &mut action_handler,
-            &mut ctx.env,
-            &view_class,
-            &ctx.view.0,
-            virtual_view_id,
-            granularity,
-            forward,
-            extend_selection,
-        ) {
-            return false;
-        }
-        self.enqueue_render_if_needed(ctx);
-        true
+        self.access_action(ctx, move |adapter, action_handler| {
+            adapter.traverse_text(
+                action_handler,
+                virtual_view_id,
+                granularity,
+                forward,
+                extend_selection,
+            )
+        })
     }
 
     fn on_create_input_connection<'local>(

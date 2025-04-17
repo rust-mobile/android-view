@@ -468,16 +468,7 @@ public abstract class RustView extends SurfaceView implements SurfaceHolder.Call
                                 forward,
                                 extendSelection);
                 }
-                if (!performAccessibilityActionNative(mViewPeer, virtualViewId, action)) {
-                    return false;
-                }
-                switch (action) {
-                    case AccessibilityNodeInfo.ACTION_CLICK:
-                        sendEventInternal(
-                                RustView.this, virtualViewId, AccessibilityEvent.TYPE_VIEW_CLICKED);
-                        break;
-                }
-                return true;
+                return performAccessibilityActionNative(mViewPeer, virtualViewId, action);
             }
 
             @Override

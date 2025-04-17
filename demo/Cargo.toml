@@ -9,7 +9,7 @@ crate-type = ["cdylib"]
 
 [dependencies]
 accesskit = "0.18"
-accesskit_android = { git = "https://github.com/AccessKit/accesskit", branch = "fix-android-after-drop-frozen-node" }
+accesskit_android = { git = "https://github.com/AccessKit/accesskit", branch = "android-queued-events" }
 android-view = { path = ".." }
 android_logger = "0.15.0"
 anyhow = "1.0.96"
