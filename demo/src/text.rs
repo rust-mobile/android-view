@@ -44,7 +44,7 @@ impl Editor {
         styles.insert(StyleProperty::LineHeight(1.2));
         styles.insert(GenericFamily::SystemUi.into());
         styles.insert(StyleProperty::Brush(palette::css::WHITE.into()));
-        Self {
+        let mut result = Self {
             font_cx: Default::default(),
             layout_cx: Default::default(),
             editor,
@@ -56,7 +56,9 @@ impl Editor {
             //modifiers: Default::default(), TODO: restore if needed
             start_time: Default::default(),
             blink_period: Default::default(),
-        }
+        };
+        result.driver().move_to_text_end();
+        result
     }
 
     pub fn driver(&mut self) -> PlainEditorDriver<'_, Brush> {

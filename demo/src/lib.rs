@@ -4,7 +4,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use accesskit::{ActionHandler, ActionRequest, ActivationHandler, Node, Role, Tree, TreeUpdate};
+use accesskit::{Action, ActionHandler, ActionRequest, ActivationHandler, Node, Role, Tree, TreeUpdate};
 use accesskit_android::QueuedEvents;
 use android_view::{
     jni::{
@@ -13,7 +13,7 @@ use android_view::{
         sys::{JNI_VERSION_1_6, JavaVM as RawJavaVM, jfloat, jint, jlong},
     },
     ndk::{
-        event::{KeyAction, Keycode},
+        event::{KeyAction, MotionAction, Keycode},
         native_window::NativeWindow,
     },
     *,
@@ -78,6 +78,7 @@ struct EditorAccessTreeSource<'a> {
 impl EditorAccessTreeSource<'_> {
     fn build_text_input_node(&mut self, update: &mut TreeUpdate) -> Node {
         let mut node = Node::new(Role::MultilineTextInput);
+        node.add_action(Action::Click);
         if let Some(surface) = &self.render_surface {
             node.set_bounds(accesskit::Rect {
                 x0: 0.0,
@@ -111,13 +112,23 @@ impl ActivationHandler for EditorAccessTreeSource<'_> {
     }
 }
 
-struct EditorAccessActionHandler<'a> {
+fn show_soft_input<'local>(env: &mut JNIEnv<'local>, view: &View<'local>) {
+    let imm = view.input_method_manager(env);
+    imm.show_soft_input(env, view, 0);
+}
+
+struct EditorAccessActionHandler<'a, 'local> {
+    ctx: &'a mut CallbackCtx<'local>,
     editor: &'a mut text::Editor,
 }
 
-impl ActionHandler for EditorAccessActionHandler<'_> {
+impl ActionHandler for EditorAccessActionHandler<'_, '_> {
     fn do_action<'local>(&mut self, req: ActionRequest) {
         if req.target == TEXT_INPUT_ID {
+            if req.action == Action::Click {
+                self.ctx.push_static_deferred_callback(show_soft_input);
+                return;
+            }
             self.editor.handle_accesskit_action_request(&req);
         }
     }
@@ -315,6 +326,7 @@ impl DemoViewPeer {
         ) -> Option<QueuedEvents>,
     ) -> bool {
         let mut action_handler = EditorAccessActionHandler {
+            ctx,
             editor: &mut self.editor,
         };
         if let Some(events) = f(&mut self.access_adapter, &mut action_handler) {
@@ -331,8 +343,6 @@ impl DemoViewPeer {
 }
 
 impl ViewPeer for DemoViewPeer {
-    // TODO
-
     fn on_key_down<'local>(
         &mut self,
         ctx: &mut CallbackCtx<'local>,
@@ -343,6 +353,18 @@ impl ViewPeer for DemoViewPeer {
             return false;
         }
         self.enqueue_render_if_needed(ctx);
+        true
+    }
+
+    fn on_touch_event<'local>(
+        &mut self,
+        ctx: &mut CallbackCtx<'local>,
+        event: &MotionEvent<'local>,
+    ) -> bool {
+        // TODO: proper touch handling
+        if event.action_masked(&mut ctx.env) == MotionAction::Up {
+            ctx.push_static_deferred_callback(show_soft_input);
+        }
         true
     }
 
