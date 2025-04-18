@@ -280,6 +280,7 @@ where
     };
     let mut ctx = CallbackCtx::new(env, view);
     let result = f(&mut ctx, &mut **peer);
+    drop(map);
     ctx.finish();
     result
 }
