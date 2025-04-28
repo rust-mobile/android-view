@@ -4,7 +4,9 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use accesskit::{Action, ActionHandler, ActionRequest, ActivationHandler, Node, Role, Tree, TreeUpdate};
+use accesskit::{
+    Action, ActionHandler, ActionRequest, ActivationHandler, Node, Role, Tree, TreeUpdate,
+};
 use accesskit_android::QueuedEvents;
 use android_view::{
     jni::{
@@ -13,7 +15,7 @@ use android_view::{
         sys::{JNI_VERSION_1_6, JavaVM as RawJavaVM, jfloat, jint, jlong},
     },
     ndk::{
-        event::{KeyAction, MotionAction, Keycode},
+        event::{KeyAction, Keycode, MotionAction},
         native_window::NativeWindow,
     },
     *,
