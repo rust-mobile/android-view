@@ -378,7 +378,7 @@ dependencies = [
 [[package]]
 name = "fontique"
 version = "0.3.0"
-source = "git+https://github.com/linebender/parley?branch=editor-features-for-android-ime#41028883185e8ab3f8e6f296464806699649c979"
+source = "git+https://github.com/linebender/parley?branch=editor-features-for-android-ime#14c25dcbbdaf47b83d7759447dfc64a52e0e8e73"
 dependencies = [
  "bytemuck",
  "fontconfig-cache-parser",
@@ -915,7 +915,7 @@ dependencies = [
 [[package]]
 name = "parley"
 version = "0.3.0"
-source = "git+https://github.com/linebender/parley?branch=editor-features-for-android-ime#41028883185e8ab3f8e6f296464806699649c979"
+source = "git+https://github.com/linebender/parley?branch=editor-features-for-android-ime#14c25dcbbdaf47b83d7759447dfc64a52e0e8e73"
 dependencies = [
  "accesskit",
  "fontique",
