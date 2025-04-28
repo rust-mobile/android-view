@@ -2,7 +2,7 @@ use jni::{
     JNIEnv, NativeMethod,
     descriptors::Desc,
     objects::{JClass, JIntArray, JObject},
-    sys::{JNI_FALSE, JNI_TRUE, jboolean, jfloat, jint, jlong},
+    sys::{JNI_TRUE, jboolean, jfloat, jint, jlong},
 };
 use ndk::event::Keycode;
 use num_enum::FromPrimitive;
@@ -15,7 +15,9 @@ use std::{
     },
 };
 
-use crate::{binder::*, callback_ctx::*, context::*, events::*, graphics::*, ime::*, surface::*};
+use crate::{
+    binder::*, callback_ctx::*, context::*, events::*, graphics::*, ime::*, surface::*, util::*,
+};
 
 #[repr(transparent)]
 pub struct View<'local>(pub JObject<'local>);
@@ -248,27 +250,18 @@ pub trait ViewPeer: Send {
         false
     }
 
-    fn on_create_input_connection<'local>(
-        &mut self,
-        ctx: &mut CallbackCtx<'local>,
-        out_attrs: &EditorInfo<'local>,
-    ) -> bool {
-        false
-    }
-
-    fn as_input_connection(&mut self) -> &mut dyn InputConnection {
-        unimplemented!()
+    fn as_input_connection(&mut self) -> Option<&mut dyn InputConnection> {
+        None
     }
 }
 
 static NEXT_PEER_ID: AtomicI64 = AtomicI64::new(0);
 static PEER_MAP: Mutex<BTreeMap<jlong, Box<dyn ViewPeer>>> = Mutex::new(BTreeMap::new());
 
-pub(crate) fn with_peer_and_default<'local, F, T>(
+pub(crate) fn with_peer<'local, F, T: Default>(
     env: JNIEnv<'local>,
     view: View<'local>,
     id: jlong,
-    default: T,
     f: F,
 ) -> T
 where
@@ -276,20 +269,13 @@ where
 {
     let mut map = PEER_MAP.lock().unwrap();
     let Some(peer) = map.get_mut(&id) else {
-        return default;
+        return T::default();
     };
     let mut ctx = CallbackCtx::new(env, view);
     let result = f(&mut ctx, &mut **peer);
     drop(map);
     ctx.finish();
     result
-}
-
-fn with_peer<'local, F, T: Default>(env: JNIEnv<'local>, view: View<'local>, id: jlong, f: F) -> T
-where
-    F: FnOnce(&mut CallbackCtx<'local>, &mut dyn ViewPeer) -> T,
-{
-    with_peer_and_default(env, view, id, T::default(), f)
 }
 
 extern "system" fn on_measure<'local>(
@@ -341,10 +327,6 @@ extern "system" fn on_size_changed<'local>(
     })
 }
 
-fn to_jboolean(flag: bool) -> jboolean {
-    if flag { JNI_TRUE } else { JNI_FALSE }
-}
-
 extern "system" fn on_key_down<'local>(
     env: JNIEnv<'local>,
     view: View<'local>,
@@ -352,9 +334,9 @@ extern "system" fn on_key_down<'local>(
     key_code: jint,
     event: KeyEvent<'local>,
 ) -> jboolean {
-    with_peer(env, view, peer, |ctx, peer| {
-        to_jboolean(peer.on_key_down(ctx, Keycode::from_primitive(key_code), &event))
-    })
+    as_jboolean(with_peer(env, view, peer, |ctx, peer| {
+        peer.on_key_down(ctx, Keycode::from_primitive(key_code), &event)
+    }))
 }
 
 extern "system" fn on_key_up<'local>(
@@ -364,9 +346,9 @@ extern "system" fn on_key_up<'local>(
     key_code: jint,
     event: KeyEvent<'local>,
 ) -> jboolean {
-    with_peer(env, view, peer, |ctx, peer| {
-        to_jboolean(peer.on_key_up(ctx, Keycode::from_primitive(key_code), &event))
-    })
+    as_jboolean(with_peer(env, view, peer, |ctx, peer| {
+        peer.on_key_up(ctx, Keycode::from_primitive(key_code), &event)
+    }))
 }
 
 extern "system" fn on_trackball_event<'local>(
@@ -375,9 +357,9 @@ extern "system" fn on_trackball_event<'local>(
     peer: jlong,
     event: MotionEvent<'local>,
 ) -> jboolean {
-    with_peer(env, view, peer, |ctx, peer| {
-        to_jboolean(peer.on_trackball_event(ctx, &event))
-    })
+    as_jboolean(with_peer(env, view, peer, |ctx, peer| {
+        peer.on_trackball_event(ctx, &event)
+    }))
 }
 
 extern "system" fn on_touch_event<'local>(
@@ -386,9 +368,9 @@ extern "system" fn on_touch_event<'local>(
     peer: jlong,
     event: MotionEvent<'local>,
 ) -> jboolean {
-    with_peer(env, view, peer, |ctx, peer| {
-        to_jboolean(peer.on_touch_event(ctx, &event))
-    })
+    as_jboolean(with_peer(env, view, peer, |ctx, peer| {
+        peer.on_touch_event(ctx, &event)
+    }))
 }
 
 extern "system" fn on_generic_motion_event<'local>(
@@ -397,9 +379,9 @@ extern "system" fn on_generic_motion_event<'local>(
     peer: jlong,
     event: MotionEvent<'local>,
 ) -> jboolean {
-    with_peer(env, view, peer, |ctx, peer| {
-        to_jboolean(peer.on_generic_motion_event(ctx, &event))
-    })
+    as_jboolean(with_peer(env, view, peer, |ctx, peer| {
+        peer.on_generic_motion_event(ctx, &event)
+    }))
 }
 
 extern "system" fn on_focus_changed<'local>(
@@ -528,19 +510,15 @@ extern "system" fn populate_accessibility_node_info<'local>(
     virtual_view_id: jint,
     node_info: JObject<'local>,
 ) -> jboolean {
-    with_peer(env, view, peer, |ctx, peer| {
-        if peer.populate_accessibility_node_info(
+    as_jboolean(with_peer(env, view, peer, |ctx, peer| {
+        peer.populate_accessibility_node_info(
             ctx,
             host_screen_x,
             host_screen_y,
             virtual_view_id,
             &node_info,
-        ) {
-            JNI_TRUE
-        } else {
-            JNI_FALSE
-        }
-    })
+        )
+    }))
 }
 
 extern "system" fn get_input_focus<'local>(
@@ -548,7 +526,7 @@ extern "system" fn get_input_focus<'local>(
     view: View<'local>,
     peer: jlong,
 ) -> jint {
-    with_peer_and_default(env, view, peer, -1, |ctx, peer| peer.input_focus(ctx))
+    with_peer(env, view, peer, |ctx, peer| Some(peer.input_focus(ctx))).unwrap_or(-1)
 }
 
 extern "system" fn get_virtual_view_at_point<'local>(
@@ -558,9 +536,10 @@ extern "system" fn get_virtual_view_at_point<'local>(
     x: jfloat,
     y: jfloat,
 ) -> jint {
-    with_peer_and_default(env, view, peer, -1, |ctx, peer| {
-        peer.virtual_view_at_point(ctx, x, y)
+    with_peer(env, view, peer, |ctx, peer| {
+        Some(peer.virtual_view_at_point(ctx, x, y))
     })
+    .unwrap_or(-1)
 }
 
 extern "system" fn perform_accessibility_action<'local>(
@@ -570,13 +549,9 @@ extern "system" fn perform_accessibility_action<'local>(
     virtual_view_id: jint,
     action: jint,
 ) -> jboolean {
-    with_peer(env, view, peer, |ctx, peer| {
-        if peer.perform_accessibility_action(ctx, virtual_view_id, action) {
-            JNI_TRUE
-        } else {
-            JNI_FALSE
-        }
-    })
+    as_jboolean(with_peer(env, view, peer, |ctx, peer| {
+        peer.perform_accessibility_action(ctx, virtual_view_id, action)
+    }))
 }
 
 extern "system" fn accessibility_set_text_selection<'local>(
@@ -587,13 +562,9 @@ extern "system" fn accessibility_set_text_selection<'local>(
     anchor: jint,
     focus: jint,
 ) -> jboolean {
-    with_peer(env, view, peer, |ctx, peer| {
-        if peer.accessibility_set_text_selection(ctx, virtual_view_id, anchor, focus) {
-            JNI_TRUE
-        } else {
-            JNI_FALSE
-        }
-    })
+    as_jboolean(with_peer(env, view, peer, |ctx, peer| {
+        peer.accessibility_set_text_selection(ctx, virtual_view_id, anchor, focus)
+    }))
 }
 
 extern "system" fn accessibility_collapse_text_selection<'local>(
@@ -602,13 +573,9 @@ extern "system" fn accessibility_collapse_text_selection<'local>(
     peer: jlong,
     virtual_view_id: jint,
 ) -> jboolean {
-    with_peer(env, view, peer, |ctx, peer| {
-        if peer.accessibility_collapse_text_selection(ctx, virtual_view_id) {
-            JNI_TRUE
-        } else {
-            JNI_FALSE
-        }
-    })
+    as_jboolean(with_peer(env, view, peer, |ctx, peer| {
+        peer.accessibility_collapse_text_selection(ctx, virtual_view_id)
+    }))
 }
 
 extern "system" fn accessibility_traverse_text<'local>(
@@ -620,34 +587,15 @@ extern "system" fn accessibility_traverse_text<'local>(
     forward: jboolean,
     extend_selection: jboolean,
 ) -> jboolean {
-    with_peer(env, view, peer, |ctx, peer| {
-        if peer.accessibility_traverse_text(
+    as_jboolean(with_peer(env, view, peer, |ctx, peer| {
+        peer.accessibility_traverse_text(
             ctx,
             virtual_view_id,
             granularity,
             forward == JNI_TRUE,
             extend_selection == JNI_TRUE,
-        ) {
-            JNI_TRUE
-        } else {
-            JNI_FALSE
-        }
-    })
-}
-
-extern "system" fn on_create_input_connection<'local>(
-    env: JNIEnv<'local>,
-    view: View<'local>,
-    peer: jlong,
-    out_attrs: EditorInfo<'local>,
-) -> jboolean {
-    with_peer(env, view, peer, |ctx, peer| {
-        if peer.on_create_input_connection(ctx, &out_attrs) {
-            JNI_TRUE
-        } else {
-            JNI_FALSE
-        }
-    })
+        )
+    }))
 }
 
 pub fn register_view_peer(peer: impl 'static + ViewPeer) -> jlong {

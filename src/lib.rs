@@ -17,5 +17,6 @@ mod ime;
 pub use ime::*;
 mod surface;
 pub use surface::*;
+mod util;
 mod view;
 pub use view::*;

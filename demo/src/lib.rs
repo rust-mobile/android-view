@@ -549,11 +549,17 @@ impl ViewPeer for DemoViewPeer {
         })
     }
 
+    fn as_input_connection(&mut self) -> Option<&mut dyn InputConnection> {
+        Some(self)
+    }
+}
+
+impl InputConnection for DemoViewPeer {
     fn on_create_input_connection<'local>(
         &mut self,
         ctx: &mut CallbackCtx<'local>,
         out_attrs: &EditorInfo<'local>,
-    ) -> bool {
+    ) {
         out_attrs.set_input_type(
             &mut ctx.env,
             INPUT_TYPE_CLASS_TEXT
@@ -576,15 +582,8 @@ impl ViewPeer for DemoViewPeer {
         self.editor.driver().clear_compose();
         self.enqueue_render_if_needed(ctx);
         self.ime_active = true;
-        true
     }
 
-    fn as_input_connection(&mut self) -> &mut dyn InputConnection {
-        self
-    }
-}
-
-impl InputConnection for DemoViewPeer {
     fn text_before_cursor<'slf>(
         &'slf mut self,
         _ctx: &mut CallbackCtx,
