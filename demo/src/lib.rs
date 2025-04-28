@@ -7,12 +7,10 @@
 use accesskit::{
     Action, ActionHandler, ActionRequest, ActivationHandler, Node, Role, Tree, TreeUpdate,
 };
-use accesskit_android::QueuedEvents;
 use android_view::{
     jni::{
         JNIEnv, JavaVM,
-        objects::JObject,
-        sys::{JNI_VERSION_1_6, JavaVM as RawJavaVM, jfloat, jint, jlong},
+        sys::{JNI_VERSION_1_6, JavaVM as RawJavaVM, jint, jlong},
     },
     ndk::{
         event::{KeyAction, Keycode, MotionAction},
@@ -235,8 +233,7 @@ impl DemoViewPeer {
                 update
             }) {
                 ctx.push_dynamic_deferred_callback(move |env, view| {
-                    let view_class = env.get_object_class(&view.0).unwrap();
-                    events.raise(env, &view_class, &view.0);
+                    events.raise(env, &view.0);
                 });
             }
 
@@ -318,30 +315,6 @@ impl DemoViewPeer {
         let mut drv = self.editor.driver();
         drv.move_to_byte(cursor_pos);
     }
-
-    fn access_action(
-        &mut self,
-        ctx: &mut CallbackCtx,
-        f: impl FnOnce(
-            &mut accesskit_android::Adapter,
-            &mut EditorAccessActionHandler,
-        ) -> Option<QueuedEvents>,
-    ) -> bool {
-        let mut action_handler = EditorAccessActionHandler {
-            ctx,
-            editor: &mut self.editor,
-        };
-        if let Some(events) = f(&mut self.access_adapter, &mut action_handler) {
-            ctx.push_dynamic_deferred_callback(move |env, view| {
-                let view_class = env.get_object_class(&view.0).unwrap();
-                events.raise(env, &view_class, &view.0);
-            });
-            self.enqueue_render_if_needed(ctx);
-            true
-        } else {
-            false
-        }
-    }
 }
 
 impl ViewPeer for DemoViewPeer {
@@ -368,6 +341,31 @@ impl ViewPeer for DemoViewPeer {
             ctx.push_static_deferred_callback(show_soft_input);
         }
         true
+    }
+
+    fn on_hover_event<'local>(
+        &mut self,
+        ctx: &mut CallbackCtx<'local>,
+        event: &MotionEvent<'local>,
+    ) -> bool {
+        let mut tree_source = EditorAccessTreeSource {
+            render_surface: &self.render_surface,
+            editor: &mut self.editor,
+        };
+        let action = event.action(&mut ctx.env);
+        let x = event.x(&mut ctx.env);
+        let y = event.y(&mut ctx.env);
+        if let Some(events) = self
+            .access_adapter
+            .on_hover_event(&mut tree_source, action, x, y)
+        {
+            ctx.push_dynamic_deferred_callback(move |env, view| {
+                events.raise(env, &view.0);
+            });
+            true
+        } else {
+            false
+        }
     }
 
     fn on_focus_changed<'local>(
@@ -455,102 +453,78 @@ impl ViewPeer for DemoViewPeer {
         self.schedule_next_blink(ctx);
     }
 
-    fn populate_accessibility_node_info<'local>(
-        &mut self,
-        ctx: &mut CallbackCtx<'local>,
-        host_screen_x: jint,
-        host_screen_y: jint,
-        virtual_view_id: jint,
-        node_info: &JObject<'local>,
-    ) -> bool {
-        let mut tree_source = EditorAccessTreeSource {
-            render_surface: &self.render_surface,
-            editor: &mut self.editor,
-        };
-        self.access_adapter
-            .populate_node_info(
-                &mut tree_source,
-                &mut ctx.env,
-                &ctx.view.0,
-                host_screen_x,
-                host_screen_y,
-                virtual_view_id,
-                node_info,
-            )
-            .unwrap()
-    }
-
-    fn input_focus(&mut self, _ctx: &mut CallbackCtx) -> jint {
-        let mut tree_source = EditorAccessTreeSource {
-            render_surface: &self.render_surface,
-            editor: &mut self.editor,
-        };
-        self.access_adapter.input_focus(&mut tree_source)
-    }
-
-    fn virtual_view_at_point(&mut self, _ctx: &mut CallbackCtx, x: jfloat, y: jfloat) -> jint {
-        let mut tree_source = EditorAccessTreeSource {
-            render_surface: &self.render_surface,
-            editor: &mut self.editor,
-        };
-        self.access_adapter
-            .virtual_view_at_point(&mut tree_source, x, y)
-    }
-
-    fn perform_accessibility_action(
-        &mut self,
-        ctx: &mut CallbackCtx,
-        virtual_view_id: jint,
-        action: jint,
-    ) -> bool {
-        self.access_action(ctx, move |adapter, action_handler| {
-            adapter.perform_action(action_handler, virtual_view_id, action)
-        })
-    }
-
-    fn accessibility_set_text_selection(
-        &mut self,
-        ctx: &mut CallbackCtx,
-        virtual_view_id: jint,
-        anchor: jint,
-        focus: jint,
-    ) -> bool {
-        self.access_action(ctx, move |adapter, action_handler| {
-            adapter.set_text_selection(action_handler, virtual_view_id, anchor, focus)
-        })
-    }
-
-    fn accessibility_collapse_text_selection(
-        &mut self,
-        ctx: &mut CallbackCtx,
-        virtual_view_id: jint,
-    ) -> bool {
-        self.access_action(ctx, move |adapter, action_handler| {
-            adapter.collapse_text_selection(action_handler, virtual_view_id)
-        })
-    }
-
-    fn accessibility_traverse_text(
-        &mut self,
-        ctx: &mut CallbackCtx,
-        virtual_view_id: jint,
-        granularity: jint,
-        forward: bool,
-        extend_selection: bool,
-    ) -> bool {
-        self.access_action(ctx, move |adapter, action_handler| {
-            adapter.traverse_text(
-                action_handler,
-                virtual_view_id,
-                granularity,
-                forward,
-                extend_selection,
-            )
-        })
+    fn as_accessibility_node_provider(&mut self) -> Option<&mut dyn AccessibilityNodeProvider> {
+        Some(self)
     }
 
     fn as_input_connection(&mut self) -> Option<&mut dyn InputConnection> {
         Some(self)
+    }
+}
+
+impl AccessibilityNodeProvider for DemoViewPeer {
+    fn create_accessibility_node_info<'local>(
+        &mut self,
+        ctx: &mut CallbackCtx<'local>,
+        virtual_view_id: jint,
+    ) -> AccessibilityNodeInfo<'local> {
+        let mut tree_source = EditorAccessTreeSource {
+            render_surface: &self.render_surface,
+            editor: &mut self.editor,
+        };
+        AccessibilityNodeInfo(self.access_adapter.create_accessibility_node_info(
+            &mut tree_source,
+            &mut ctx.env,
+            &ctx.view.0,
+            virtual_view_id,
+        ))
+    }
+
+    fn find_focus<'local>(
+        &mut self,
+        ctx: &mut CallbackCtx<'local>,
+        focus_type: jint,
+    ) -> AccessibilityNodeInfo<'local> {
+        let mut tree_source = EditorAccessTreeSource {
+            render_surface: &self.render_surface,
+            editor: &mut self.editor,
+        };
+        AccessibilityNodeInfo(self.access_adapter.find_focus(
+            &mut tree_source,
+            &mut ctx.env,
+            &ctx.view.0,
+            focus_type,
+        ))
+    }
+
+    fn perform_action<'local>(
+        &mut self,
+        ctx: &mut CallbackCtx<'local>,
+        virtual_view_id: jint,
+        action: jint,
+        arguments: &Bundle<'local>,
+    ) -> bool {
+        let Some(action) =
+            accesskit_android::PlatformAction::from_java(&mut ctx.env, action, &arguments.0)
+        else {
+            return false;
+        };
+        let mut action_handler = EditorAccessActionHandler {
+            ctx,
+            editor: &mut self.editor,
+        };
+        if let Some(events) =
+            self.access_adapter
+                .perform_action(&mut action_handler, virtual_view_id, &action)
+        {
+            ctx.push_dynamic_deferred_callback(move |env, view| {
+                events.raise(env, &view.0);
+            });
+            self.enqueue_render_if_needed(ctx);
+            true
+        } else {
+            false
+        }
     }
 }
 

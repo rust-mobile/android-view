@@ -3,8 +3,12 @@
 pub use jni;
 pub use ndk;
 
+mod accessibility;
+pub use accessibility::*;
 mod binder;
 pub use binder::*;
+mod bundle;
+pub use bundle::*;
 mod callback_ctx;
 pub use callback_ctx::*;
 mod context;

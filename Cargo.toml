@@ -19,4 +19,4 @@ panic = "abort"
 panic = "abort"
 
 [patch.crates-io]
-accesskit = { git = "https://github.com/AccessKit/accesskit", branch = "android-queued-events" }
+accesskit = { git = "https://github.com/AccessKit/accesskit", branch = "android-less-java" }
