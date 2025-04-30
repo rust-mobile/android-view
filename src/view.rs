@@ -17,7 +17,7 @@ use std::{
 
 use crate::{
     accessibility::*, binder::*, callback_ctx::*, context::*, events::*, graphics::*, ime::*,
-    surface::*, util::*,
+    surface::*, util::*, view_configuration::*,
 };
 
 #[repr(transparent)]
@@ -70,6 +70,10 @@ impl<'local> View<'local> {
             .l()
             .unwrap(),
         )
+    }
+
+    pub fn view_configuration(&self, env: &mut JNIEnv<'local>) -> ViewConfiguration {
+        ViewConfiguration::new(&self.0, env)
     }
 
     pub fn window_token(&self, env: &mut JNIEnv<'local>) -> IBinder<'local> {

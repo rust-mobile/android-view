@@ -3,19 +3,23 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
 use accesskit::{Node, TreeUpdate};
-use android_view::{KeyEvent, jni::JNIEnv, ndk::event::Keycode};
 use core::default::Default;
-use parley::{GenericFamily, StyleProperty, editor::SplitString, layout::PositionedLayoutItem};
+pub use parley::editor::Generation;
+use parley::{
+    FontContext, GenericFamily, LayoutContext, PlainEditor, PlainEditorDriver, StyleProperty,
+    editor::SplitString, layout::PositionedLayoutItem,
+};
 use std::time::{Duration, Instant};
+use ui_events::{
+    keyboard::{Code, Key, KeyState, KeyboardEvent, NamedKey},
+    pointer::{PointerButton, PointerEvent, PointerState, PointerUpdate},
+};
 use vello::{
     Scene,
     kurbo::{Affine, Line, Stroke},
     peniko::color::palette,
     peniko::{Brush, Fill},
 };
-
-pub use parley::layout::editor::Generation;
-use parley::{FontContext, LayoutContext, PlainEditor, PlainEditorDriver};
 
 use crate::access_ids::next_node_id;
 
@@ -25,19 +29,14 @@ pub struct Editor {
     font_cx: FontContext,
     layout_cx: LayoutContext<Brush>,
     editor: PlainEditor<Brush>,
-    last_click_time: Option<Instant>,
-    click_count: u32,
-    pointer_down: bool,
-    cursor_pos: (f32, f32),
     cursor_visible: bool,
-    //modifiers: Option<Modifiers>, TODO: restore this state if needed
     start_time: Option<Instant>,
     blink_period: Duration,
 }
 
 impl Editor {
     pub fn new(text: &str) -> Self {
-        let mut editor = PlainEditor::new(32.0);
+        let mut editor = PlainEditor::new(48.0);
         editor.set_text(text);
         editor.set_scale(1.0);
         let styles = editor.edit_styles();
@@ -48,12 +47,7 @@ impl Editor {
             font_cx: Default::default(),
             layout_cx: Default::default(),
             editor,
-            last_click_time: Default::default(),
-            click_count: Default::default(),
-            pointer_down: Default::default(),
-            cursor_pos: Default::default(),
             cursor_visible: Default::default(),
-            //modifiers: Default::default(), TODO: restore if needed
             start_time: Default::default(),
             blink_period: Default::default(),
         };
@@ -159,130 +153,198 @@ impl Editor {
         });
     }
 
-    pub fn on_key_down<'local>(
-        &mut self,
-        env: &mut JNIEnv<'local>,
-        key_code: Keycode,
-        event: &KeyEvent<'local>,
-    ) -> bool {
+    pub fn on_keyboard_event(&mut self, ev: KeyboardEvent) -> bool {
         self.cursor_reset();
         let mut drv = self.editor.driver(&mut self.font_cx, &mut self.layout_cx);
-        let meta_state = event.meta_state(env);
-        let shift = meta_state.shift_on();
-        let action_mod = meta_state.ctrl_on();
 
-        match key_code {
+        match ev {
             // TODO: clipboard commands?
-            Keycode::A if action_mod => {
-                if shift {
+            KeyboardEvent {
+                state: KeyState::Up,
+                ..
+            } => {
+                // All other handlers are for KeyState::Down.
+                return false;
+            }
+            KeyboardEvent {
+                code: Code::KeyA,
+                modifiers,
+                ..
+            } if modifiers.ctrl() => {
+                if modifiers.shift() {
                     drv.collapse_selection();
                 } else {
                     drv.select_all();
                 }
             }
-            Keycode::DpadLeft => {
-                if action_mod {
-                    if shift {
+            KeyboardEvent {
+                key: Key::Named(NamedKey::ArrowLeft),
+                modifiers,
+                ..
+            } => {
+                if modifiers.ctrl() {
+                    if modifiers.shift() {
                         drv.select_word_left();
                     } else {
                         drv.move_word_left();
                     }
-                } else if shift {
+                } else if modifiers.shift() {
                     drv.select_left();
                 } else {
                     drv.move_left();
                 }
             }
-            Keycode::DpadRight => {
-                if action_mod {
-                    if shift {
+            KeyboardEvent {
+                key: Key::Named(NamedKey::ArrowRight),
+                modifiers,
+                ..
+            } => {
+                if modifiers.ctrl() {
+                    if modifiers.shift() {
                         drv.select_word_right();
                     } else {
                         drv.move_word_right();
                     }
-                } else if shift {
+                } else if modifiers.shift() {
                     drv.select_right();
                 } else {
                     drv.move_right();
                 }
             }
-            Keycode::DpadUp => {
-                if shift {
+            KeyboardEvent {
+                key: Key::Named(NamedKey::ArrowUp),
+                modifiers,
+                ..
+            } => {
+                if modifiers.shift() {
                     drv.select_up();
                 } else {
                     drv.move_up();
                 }
             }
-            Keycode::DpadDown => {
-                if shift {
+            KeyboardEvent {
+                key: Key::Named(NamedKey::ArrowDown),
+                modifiers,
+                ..
+            } => {
+                if modifiers.shift() {
                     drv.select_down();
                 } else {
                     drv.move_down();
                 }
             }
-            Keycode::MoveHome => {
-                if action_mod {
-                    if shift {
+            KeyboardEvent {
+                key: Key::Named(NamedKey::Home),
+                modifiers,
+                ..
+            } => {
+                if modifiers.ctrl() {
+                    if modifiers.shift() {
                         drv.select_to_text_start();
                     } else {
                         drv.move_to_text_start();
                     }
-                } else if shift {
+                } else if modifiers.shift() {
                     drv.select_to_line_start();
                 } else {
                     drv.move_to_line_start();
                 }
             }
-            Keycode::MoveEnd => {
-                let this = &mut *self;
-                let mut drv = this.driver();
-
-                if action_mod {
-                    if shift {
+            KeyboardEvent {
+                key: Key::Named(NamedKey::End),
+                modifiers,
+                ..
+            } => {
+                if modifiers.ctrl() {
+                    if modifiers.shift() {
                         drv.select_to_text_end();
                     } else {
                         drv.move_to_text_end();
                     }
-                } else if shift {
+                } else if modifiers.shift() {
                     drv.select_to_line_end();
                 } else {
                     drv.move_to_line_end();
                 }
             }
-            Keycode::ForwardDel => {
-                if action_mod {
+            KeyboardEvent {
+                key: Key::Named(NamedKey::Delete),
+                modifiers,
+                ..
+            } => {
+                if modifiers.ctrl() {
                     drv.delete_word();
                 } else {
                     drv.delete();
                 }
             }
-            Keycode::Del => {
-                if action_mod {
+            KeyboardEvent {
+                key: Key::Named(NamedKey::Backspace),
+                modifiers,
+                ..
+            } => {
+                if modifiers.ctrl() {
                     drv.backdelete_word();
                 } else {
                     drv.backdelete();
                 }
             }
-            Keycode::Enter | Keycode::NumpadEnter => {
+            KeyboardEvent {
+                key: Key::Named(NamedKey::Enter),
+                ..
+            } => {
                 drv.insert_or_replace_selection("\n");
             }
-            Keycode::Space => {
-                drv.insert_or_replace_selection(" ");
+            KeyboardEvent {
+                key: Key::Character(s),
+                ..
+            } => {
+                drv.insert_or_replace_selection(&s);
             }
             _ => {
-                if let Some(c) = event.unicode_char(env) {
-                    let mut b = [0u8; 4];
-                    let s = c.encode_utf8(&mut b);
-                    drv.insert_or_replace_selection(s);
-                    return true;
-                }
                 return false;
             }
         }
         true
     }
 
-    // TODO: motion events
+    pub fn handle_pointer_event(&mut self, ev: PointerEvent) -> bool {
+        let mut drv = self.editor.driver(&mut self.font_cx, &mut self.layout_cx);
+        match ev {
+            PointerEvent::Down {
+                button: None | Some(PointerButton::Primary),
+                state:
+                    PointerState {
+                        position,
+                        count,
+                        modifiers,
+                        ..
+                    },
+                ..
+            } => match count {
+                2 => drv.select_word_at_point(position.x as f32 - INSET, position.y as f32 - INSET),
+                3 => drv.select_line_at_point(position.x as f32 - INSET, position.y as f32 - INSET),
+                1 if modifiers.shift() => drv.extend_selection_to_point(
+                    position.x as f32 - INSET,
+                    position.y as f32 - INSET,
+                ),
+                _ => drv.move_to_point(position.x as f32 - INSET, position.y as f32 - INSET),
+            },
+            PointerEvent::Move(PointerUpdate {
+                current: PointerState { position, .. },
+                ..
+            }) => {
+                drv.extend_selection_to_point(position.x as f32 - INSET, position.y as f32 - INSET);
+            }
+            PointerEvent::Cancel(..) => {
+                drv.collapse_selection();
+            }
+            _ => {
+                return false;
+            }
+        }
+        true
+    }
 
     pub fn handle_accesskit_action_request(&mut self, req: &accesskit::ActionRequest) {
         if req.action == accesskit::Action::SetTextSelection {
@@ -312,8 +374,14 @@ impl Editor {
             );
         });
         if self.cursor_visible {
-            if let Some(cursor) = self.editor.cursor_geometry(1.5) {
-                scene.fill(Fill::NonZero, transform, palette::css::WHITE, None, &cursor);
+            if let Some(cursor) = self.editor.cursor_geometry(5.0) {
+                scene.fill(
+                    Fill::NonZero,
+                    transform,
+                    palette::css::CADET_BLUE,
+                    None,
+                    &cursor,
+                );
             }
         }
         let layout = self.editor.layout(&mut self.font_cx, &mut self.layout_cx);
