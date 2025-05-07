@@ -7,10 +7,12 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+dpi = { version = "0.1.2", default-features = false }
 jni = "0.21.1"
 ndk = "0.9.0"
 num_enum = "0.7.3"
 smallvec = "1.15.0"
+ui-events = { git = "https://github.com/endoli/ui-events", rev = "b2ab8da" }
 
 [profile.dev]
 panic = "abort"

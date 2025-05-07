@@ -24,3 +24,5 @@ pub use surface::*;
 mod util;
 mod view;
 pub use view::*;
+mod view_configuration;
+pub use view_configuration::*;

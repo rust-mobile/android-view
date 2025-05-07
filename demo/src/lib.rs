@@ -12,10 +12,7 @@ use android_view::{
         JNIEnv, JavaVM,
         sys::{JNI_VERSION_1_6, JavaVM as RawJavaVM, jint, jlong},
     },
-    ndk::{
-        event::{KeyAction, Keycode, MotionAction},
-        native_window::NativeWindow,
-    },
+    ndk::{event::Keycode, native_window::NativeWindow},
     *,
 };
 use anyhow::Result;
@@ -25,7 +22,7 @@ use std::ffi::c_void;
 use std::num::NonZeroUsize;
 use std::time::Instant;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
-use vello::kurbo;
+use ui_events::pointer::PointerEvent;
 use vello::peniko::Color;
 use vello::util::{RenderContext, RenderSurface};
 use vello::wgpu::{
@@ -154,13 +151,12 @@ struct DemoViewPeer {
     /// The last generation of the editor layout that we drew.
     last_drawn_generation: text::Generation,
 
-    /// The IME cursor area we last sent to the platform.
-    last_sent_ime_cursor_area: kurbo::Rect,
-
     ime_active: bool,
     batch_edit_depth: usize,
 
     access_adapter: accesskit_android::Adapter,
+    /// Pointer adapter state.
+    tap_counter: TapCounter,
 }
 
 impl DemoViewPeer {
@@ -298,7 +294,6 @@ impl DemoViewPeer {
             .raw_compose()
             .clone()
             .unwrap_or_else(|| drv.editor.raw_selection().text_range());
-        drop(drv);
         let start_utf16 = self.editor.utf8_to_utf16_index(range.start);
         let end_utf16 = self.editor.utf8_to_utf16_index(range.end);
         let cursor_pos_utf16 = if new_cursor_position > 0 {
@@ -321,10 +316,29 @@ impl ViewPeer for DemoViewPeer {
     fn on_key_down<'local>(
         &mut self,
         ctx: &mut CallbackCtx<'local>,
-        key_code: Keycode,
+        _: Keycode,
         event: &KeyEvent<'local>,
     ) -> bool {
-        if !self.editor.on_key_down(&mut ctx.env, key_code, event) {
+        if !self
+            .editor
+            .on_keyboard_event(event.to_keyboard_event(&mut ctx.env))
+        {
+            return false;
+        }
+        self.enqueue_render_if_needed(ctx);
+        true
+    }
+
+    fn on_key_up<'local>(
+        &mut self,
+        ctx: &mut CallbackCtx<'local>,
+        _: Keycode,
+        event: &KeyEvent<'local>,
+    ) -> bool {
+        if !self
+            .editor
+            .on_keyboard_event(event.to_keyboard_event(&mut ctx.env))
+        {
             return false;
         }
         self.enqueue_render_if_needed(ctx);
@@ -336,11 +350,30 @@ impl ViewPeer for DemoViewPeer {
         ctx: &mut CallbackCtx<'local>,
         event: &MotionEvent<'local>,
     ) -> bool {
-        // TODO: proper touch handling
-        if event.action_masked(&mut ctx.env) == MotionAction::Up {
+        let Some(ev) = event.to_pointer_event(&mut ctx.env, &self.tap_counter.vc) else {
+            return false;
+        };
+
+        if matches!(ev, PointerEvent::Up { .. }) {
             ctx.push_static_deferred_callback(show_soft_input);
         }
+
+        if self
+            .editor
+            .handle_pointer_event(self.tap_counter.attach_count(ev))
+        {
+            self.enqueue_render_if_needed(ctx);
+        }
+
         true
+    }
+
+    fn on_generic_motion_event<'local>(
+        &mut self,
+        ctx: &mut CallbackCtx<'local>,
+        event: &MotionEvent<'local>,
+    ) -> bool {
+        self.on_touch_event(ctx, event)
     }
 
     fn on_hover_event<'local>(
@@ -364,7 +397,7 @@ impl ViewPeer for DemoViewPeer {
             });
             true
         } else {
-            false
+            self.on_touch_event(ctx, event)
         }
     }
 
@@ -387,6 +420,7 @@ impl ViewPeer for DemoViewPeer {
         width: jint,
         height: jint,
     ) {
+        self.tap_counter = TapCounter::new(ctx.view.view_configuration(&mut ctx.env));
         let editor = self.editor.editor_mut();
         editor.set_scale(1.0);
         editor.set_width(Some(width as f32 - 2_f32 * text::INSET));
@@ -773,11 +807,14 @@ impl InputConnection for DemoViewPeer {
         ctx: &mut CallbackCtx<'local>,
         event: &KeyEvent<'local>,
     ) -> bool {
-        if event.action(&mut ctx.env) != KeyAction::Down {
+        if !self
+            .editor
+            .on_keyboard_event(event.to_keyboard_event(&mut ctx.env))
+        {
             return false;
         }
-        let key_code = event.key_code(&mut ctx.env);
-        self.on_key_down(ctx, key_code, event)
+        self.enqueue_render_if_needed(ctx);
+        true
     }
 
     fn request_cursor_updates(
@@ -802,14 +839,18 @@ extern "system" fn new_view_peer<'local>(
         scene: Scene::new(),
         editor: text::Editor::new(text::LOREM),
         last_drawn_generation: Default::default(),
-        last_sent_ime_cursor_area: kurbo::Rect::new(f64::NAN, f64::NAN, f64::NAN, f64::NAN),
         ime_active: false,
         batch_edit_depth: 0,
         access_adapter: Default::default(),
+        tap_counter: TapCounter::default(),
     };
     register_view_peer(peer)
 }
 
+/// Symbol run at JNI load time.
+///
+/// # Safety
+/// There is no alternative, interacting with JNI is always unsafe at some level.
 #[unsafe(no_mangle)]
 pub unsafe extern "system" fn JNI_OnLoad(vm: *mut RawJavaVM, _: *mut c_void) -> jint {
     android_logger::init_once(
