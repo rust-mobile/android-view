@@ -58,10 +58,11 @@ fn create_vello_renderer(render_cx: &RenderContext, surface: &RenderSurface<'_>)
     Renderer::new(
         &render_cx.devices[surface.dev_id].device,
         RendererOptions {
-            surface_format: Some(surface.format),
             use_cpu: false,
             antialiasing_support: vello::AaSupport::area_only(),
             num_init_threads: None,
+            // TODO: add pipeline cache.
+            pipeline_cache: None,
         },
     )
     .expect("Couldn't create renderer")
@@ -200,12 +201,6 @@ impl DemoViewPeer {
         // Get a handle to the device.
         let device_handle = &self.context.devices[surface.dev_id];
 
-        // Get the surface's texture.
-        let surface_texture = surface
-            .surface
-            .get_current_texture()
-            .expect("failed to get surface texture");
-
         // Sometimes `Scene` is stale and needs to be redrawn.
         if self.last_drawn_generation != self.editor.generation() && self.batch_edit_depth == 0 {
             // Empty the scene of objects to draw. You could create a new Scene each time, but in this case
@@ -256,11 +251,11 @@ impl DemoViewPeer {
         self.renderers[surface.dev_id]
             .as_mut()
             .unwrap()
-            .render_to_surface(
+            .render_to_texture(
                 &device_handle.device,
                 &device_handle.queue,
                 &self.scene,
-                &surface_texture,
+                &surface.target_view,
                 &vello::RenderParams {
                     base_color: Color::from_rgb8(30, 30, 30), // Background color
                     width,
@@ -270,6 +265,28 @@ impl DemoViewPeer {
             )
             .expect("failed to render to surface");
 
+        // Get the surface's texture.
+        let surface_texture = surface
+            .surface
+            .get_current_texture()
+            .expect("failed to get surface texture");
+
+        // Perform the copy.
+        let mut encoder =
+            device_handle
+                .device
+                .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                    label: Some("Surface Blit"),
+                });
+        surface.blitter.copy(
+            &device_handle.device,
+            &mut encoder,
+            &surface.target_view,
+            &surface_texture
+                .texture
+                .create_view(&wgpu::TextureViewDescriptor::default()),
+        );
+        device_handle.queue.submit([encoder.finish()]);
         // Queue the texture to be presented on the surface.
         surface_texture.present();
 
