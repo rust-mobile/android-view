@@ -17,7 +17,7 @@ log = "0.4.26"
 parley = { git = "https://github.com/linebender/parley", branch = "editor-features-for-android-ime", features = ["accesskit"] }
 peniko = { version = "0.3.1", default-features = false }
 pollster = "0.4.0"
-ui-events = { git = "https://github.com/endoli/ui-events", rev = "b2ab8da" }
+ui-events = "0.1.0"
 vello = "0.4.0"
 
 # Send tracing events to Android GPU inspector, for profiling

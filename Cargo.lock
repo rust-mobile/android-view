@@ -1407,7 +1407,8 @@ dependencies = [
 [[package]]
 name = "ui-events"
 version = "0.1.0"
-source = "git+https://github.com/endoli/ui-events?rev=b2ab8da#b2ab8dac31e5a9334a562925f3cbd8a2aee5afd1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c4c2cc34489c685d4e7a1a1f97b7b4416c5aa789892114ae77df6cd2a60f0ec4"
 dependencies = [
  "dpi",
  "keyboard-types",
