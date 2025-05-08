@@ -8,17 +8,17 @@ name = "main"
 crate-type = ["cdylib"]
 
 [dependencies]
-accesskit = "0.18"
-accesskit_android = { git = "https://github.com/AccessKit/accesskit", branch = "android-less-java" }
+accesskit = "0.19.0"
+accesskit_android = "0.2.0"
 android-view = { path = ".." }
 android_logger = "0.15.0"
 anyhow = "1.0.96"
 log = "0.4.26"
 parley = { git = "https://github.com/linebender/parley", branch = "editor-features-for-android-ime", features = ["accesskit"] }
-peniko = { version = "0.3.1", default-features = false }
+peniko = { version = "0.4.0", default-features = false }
 pollster = "0.4.0"
 ui-events = "0.1.0"
-vello = "0.4.0"
+vello = "0.4.1"
 
 # Send tracing events to Android GPU inspector, for profiling
 tracing_android_trace = "0.1.1"
