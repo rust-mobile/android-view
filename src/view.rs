@@ -6,9 +6,12 @@ use jni::{
 };
 use ndk::event::Keycode;
 use num_enum::FromPrimitive;
+use send_wrapper::SendWrapper;
 use std::{
+    cell::RefCell,
     collections::BTreeMap,
     ffi::c_void,
+    rc::Rc,
     sync::{
         Mutex, Once,
         atomic::{AtomicI64, Ordering},
@@ -87,7 +90,7 @@ impl<'local> View<'local> {
 }
 
 #[allow(unused_variables)]
-pub trait ViewPeer: Send {
+pub trait ViewPeer {
     fn on_measure(
         &mut self,
         ctx: &mut CallbackCtx,
@@ -216,7 +219,8 @@ pub trait ViewPeer: Send {
 }
 
 static NEXT_PEER_ID: AtomicI64 = AtomicI64::new(0);
-static PEER_MAP: Mutex<BTreeMap<jlong, Box<dyn ViewPeer>>> = Mutex::new(BTreeMap::new());
+static PEER_MAP: Mutex<BTreeMap<jlong, SendWrapper<Rc<RefCell<Box<dyn ViewPeer>>>>>> =
+    Mutex::new(BTreeMap::new());
 
 pub(crate) fn with_peer<'local, F, T: Default>(
     env: JNIEnv<'local>,
@@ -227,13 +231,16 @@ pub(crate) fn with_peer<'local, F, T: Default>(
 where
     F: FnOnce(&mut CallbackCtx<'local>, &mut dyn ViewPeer) -> T,
 {
-    let mut map = PEER_MAP.lock().unwrap();
-    let Some(peer) = map.get_mut(&id) else {
+    let map = PEER_MAP.lock().unwrap();
+    let Some(peer) = map.get(&id) else {
         return T::default();
     };
+    let peer = Rc::clone(&**peer);
+    drop(map);
+    let mut peer = peer.borrow_mut();
     let mut ctx = CallbackCtx::new(env, view);
     let result = f(&mut ctx, &mut **peer);
-    drop(map);
+    drop(peer);
     ctx.finish();
     result
 }
@@ -400,9 +407,12 @@ extern "system" fn on_detached_from_window<'local>(
     peer: jlong,
 ) {
     let mut map = PEER_MAP.lock().unwrap();
-    let mut peer = map.remove(&peer).unwrap();
+    let peer = map.remove(&peer).unwrap();
+    drop(map);
+    let mut peer = peer.borrow_mut();
     let mut ctx = CallbackCtx::new(env, view);
     peer.on_detached_from_window(&mut ctx);
+    drop(peer);
     ctx.view.remove_frame_callback(&mut ctx.env);
     ctx.view.remove_delayed_callbacks(&mut ctx.env);
     ctx.finish();
@@ -475,7 +485,7 @@ extern "system" fn delayed_callback<'local>(env: JNIEnv<'local>, view: View<'loc
 pub fn register_view_peer(peer: impl 'static + ViewPeer) -> jlong {
     let id = NEXT_PEER_ID.fetch_add(1, Ordering::Relaxed);
     let mut map = PEER_MAP.lock().unwrap();
-    map.insert(id, Box::new(peer));
+    map.insert(id, SendWrapper::new(Rc::new(RefCell::new(Box::new(peer)))));
     id
 }
 
