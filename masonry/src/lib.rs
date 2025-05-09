@@ -69,6 +69,17 @@ fn scale_factor<'local>(env: &mut JNIEnv<'local>, android_ctx: &Context<'local>)
     metrics.density(env) as f64
 }
 
+fn show_soft_input<'local>(env: &mut JNIEnv<'local>, view: &View<'local>) {
+    let imm = view.input_method_manager(env);
+    imm.show_soft_input(env, view, 0);
+}
+
+fn hide_soft_input<'local>(env: &mut JNIEnv<'local>, view: &View<'local>) {
+    let imm = view.input_method_manager(env);
+    let window_token = view.window_token(env);
+    imm.hide_soft_input_from_window(env, &window_token, 0);
+}
+
 pub struct MasonryState {
     render_cx: RenderContext,
     render_root: RenderRoot,
@@ -144,10 +155,10 @@ impl<Driver: AppDriver> MasonryViewPeer<Driver> {
                         .on_action(&mut driver_ctx, widget_id, action);
                 }
                 RenderRootSignal::StartIme => {
-                    // TODO
+                    ctx.push_static_deferred_callback(show_soft_input);
                 }
                 RenderRootSignal::EndIme => {
-                    // TODO
+                    ctx.push_static_deferred_callback(hide_soft_input);
                 }
                 RenderRootSignal::ImeMoved(_position, _size) => {
                     // TODO
