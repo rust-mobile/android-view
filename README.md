@@ -7,9 +7,9 @@ This will be a library that can be reused to implement an Android view in Rust. 
 * Event handlers and other view callbacks run directly on the UI thread; there is no sending events to a separate Rust event loop thread.
 * This crate intends to stick as close as possible to the Android framework. This will be especially important for text input support.
 
-So far, glue code has been written for implementing several Android framework methods (on both `View` and `SurfaceHolder.Callback`) in Rust, but the plumbing for `InputConnection` still needs to be done. The reusable Java code also isn't yet cleanly separated from the demo application.
+## Building and running the demos
 
-## Building and running the demo
+### Common setup
 
 ```bash
 export ANDROID_NDK_HOME="path/to/ndk"
@@ -17,13 +17,28 @@ export ANDROID_HOME="path/to/sdk"
 
 rustup target add aarch64-linux-android
 cargo install cargo-ndk
+```
 
+### Simple editor demo
+
+```bash
 cargo ndk -t arm64-v8a -o app/src/main/jniLibs/ build -p android-view-demo
 ./gradlew build
 ./gradlew installDebug
 adb shell am start -n org.linebender.android.viewdemo/.DemoActivity
 # To view logs:
 adb shell run-as org.linebender.android.viewdemo logcat -v color
+```
+
+### Masonry demo
+
+```bash
+cargo ndk -t arm64-v8a -o masonry-app/src/main/jniLibs/ build -p android-view-masonry-demo
+./gradlew build
+./gradlew installDebug
+adb shell am start -n org.linebender.android.masonrydemo/.DemoActivity
+# To view logs:
+adb shell run-as org.linebender.android.masonrydemo logcat -v color
 ```
 
 ## Open questions
