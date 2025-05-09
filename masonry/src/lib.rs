@@ -117,12 +117,12 @@ impl ActionHandler for MasonryAccessActionHandler<'_> {
     }
 }
 
-struct MasonryViewPeer<Driver: AppDriver + Send> {
+struct MasonryViewPeer<Driver: AppDriver> {
     state: MasonryState,
     app_driver: Driver,
 }
 
-impl<Driver: AppDriver + Send> MasonryViewPeer<Driver> {
+impl<Driver: AppDriver> MasonryViewPeer<Driver> {
     fn handle_signals(&mut self, ctx: &mut CallbackCtx) {
         let mut needs_redraw = false;
         while let Some(signal) = self.state.render_root.pop_signal() {
@@ -198,7 +198,7 @@ impl<Driver: AppDriver + Send> MasonryViewPeer<Driver> {
 
         // If we're processing a lot of actions, we may have a lot of pending redraws.
         // We batch them up to avoid redundant requests.
-        if needs_redraw {
+        if needs_redraw && self.state.render_surface.is_some() {
             ctx.view.post_frame_callback(&mut ctx.env);
         }
     }
@@ -311,7 +311,7 @@ impl<Driver: AppDriver + Send> MasonryViewPeer<Driver> {
     }
 }
 
-impl<Driver: AppDriver + Send> ViewPeer for MasonryViewPeer<Driver> {
+impl<Driver: AppDriver> ViewPeer for MasonryViewPeer<Driver> {
     fn on_key_down<'local>(
         &mut self,
         ctx: &mut CallbackCtx<'local>,
@@ -463,7 +463,7 @@ impl<Driver: AppDriver + Send> ViewPeer for MasonryViewPeer<Driver> {
     }
 }
 
-impl<Driver: AppDriver + Send> AccessibilityNodeProvider for MasonryViewPeer<Driver> {
+impl<Driver: AppDriver> AccessibilityNodeProvider for MasonryViewPeer<Driver> {
     fn create_accessibility_node_info<'local>(
         &mut self,
         ctx: &mut CallbackCtx<'local>,
@@ -529,7 +529,7 @@ impl<Driver: AppDriver + Send> AccessibilityNodeProvider for MasonryViewPeer<Dri
 
 pub fn new_view_peer(
     root_widget: impl Widget,
-    mut app_driver: impl AppDriver + Send + 'static,
+    mut app_driver: impl AppDriver + 'static,
     background_color: Color,
 ) -> jlong {
     let mut state = MasonryState::new(root_widget, background_color);

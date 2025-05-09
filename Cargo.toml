@@ -1,5 +1,10 @@
 [workspace]
-members = [".", "demo", "masonry"]
+members = [
+    ".",
+    "demo",
+    "masonry",
+    "masonry-demo",
+]
 
 [package]
 name = "android-view"
