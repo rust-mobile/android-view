@@ -674,9 +674,9 @@ dependencies = [
 
 [[package]]
 name = "indexmap"
-version = "2.7.1"
+version = "2.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8c9c992b02b5b4c94ea26e32fe5bccb7aa7d9f390ab5c1221ff895bc7ea8b652"
+checksum = "cea70ddb795996207ad57735b50c5982d8844f38ba9ee5f1aedcfb708a2aa11e"
 dependencies = [
  "equivalent",
  "hashbrown",
@@ -835,22 +835,9 @@ dependencies = [
 ]
 
 [[package]]
-name = "masonry_android"
-version = "0.1.0"
-dependencies = [
- "accesskit",
- "accesskit_android",
- "android-view",
- "masonry_core",
- "pollster",
- "tracing",
- "vello",
-]
-
-[[package]]
-name = "masonry_core"
+name = "masonry"
 version = "0.2.0"
-source = "git+https://github.com/linebender/xilem#8322d5915dae5f1cf5b149afe241e2d6c6efc81f"
+source = "git+https://github.com/linebender/xilem#df88cef1ca3abe5e2a961372362cb360d85bf6d3"
 dependencies = [
  "accesskit",
  "anymap3",
@@ -871,6 +858,19 @@ dependencies = [
  "vello",
  "web-time",
  "wgpu",
+]
+
+[[package]]
+name = "masonry_android"
+version = "0.1.0"
+dependencies = [
+ "accesskit",
+ "accesskit_android",
+ "android-view",
+ "masonry",
+ "pollster",
+ "tracing",
+ "vello",
 ]
 
 [[package]]
@@ -1099,9 +1099,9 @@ checksum = "b15813163c1d831bf4a13c3610c05c0d03b39feb07f7e09fa234dac9b15aaf39"
 
 [[package]]
 name = "oxipng"
-version = "9.1.4"
+version = "9.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3bce05680d3f2ec3f0510f19608d56712fa7ea681b4ba293c3b74a04c2e55279"
+checksum = "26c613f0f566526a647c7473f6a8556dbce22c91b13485ee4b4ec7ab648e4973"
 dependencies = [
  "bitvec",
  "indexmap",
@@ -1742,7 +1742,7 @@ dependencies = [
 [[package]]
 name = "tree_arena"
 version = "0.1.0"
-source = "git+https://github.com/linebender/xilem#8322d5915dae5f1cf5b149afe241e2d6c6efc81f"
+source = "git+https://github.com/linebender/xilem#df88cef1ca3abe5e2a961372362cb360d85bf6d3"
 dependencies = [
  "hashbrown",
 ]

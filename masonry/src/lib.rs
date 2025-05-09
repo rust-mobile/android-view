@@ -7,7 +7,7 @@ use android_view::{
     ndk::{event::Keycode, native_window::NativeWindow},
     *,
 };
-use masonry_core::{
+use masonry::{
     Handled,
     app::{RenderRoot, RenderRootOptions, RenderRootSignal, WindowSizePolicy},
     core::{TextEvent, Widget, WindowEvent},
