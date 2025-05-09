@@ -66,11 +66,13 @@ fn make_widget_tree() -> impl Widget {
 }
 
 extern "system" fn new_view_peer<'local>(
-    _env: JNIEnv<'local>,
+    mut env: JNIEnv<'local>,
     _view: View<'local>,
-    _context: Context<'local>,
+    context: Context<'local>,
 ) -> jlong {
     masonry_android::new_view_peer(
+        &mut env,
+        &context,
         RootWidget::new(make_widget_tree()),
         Driver {
             next_task: String::new(),

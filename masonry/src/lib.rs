@@ -3,7 +3,10 @@
 
 use accesskit::{ActionHandler, ActionRequest, ActivationHandler, TreeUpdate};
 use android_view::{
-    jni::sys::{jint, jlong},
+    jni::{
+        JNIEnv,
+        sys::{jint, jlong},
+    },
     ndk::{event::Keycode, native_window::NativeWindow},
     *,
 };
@@ -16,7 +19,8 @@ use masonry::{
 };
 use tracing::{debug, info, info_span};
 use vello::{
-    Renderer, RendererOptions,
+    Renderer, RendererOptions, Scene,
+    kurbo::Affine,
     util::{RenderContext, RenderSurface},
     wgpu::{
         self, PresentMode,
@@ -59,6 +63,12 @@ fn create_vello_renderer(render_cx: &RenderContext, surface: &RenderSurface<'_>)
     .expect("Couldn't create renderer")
 }
 
+fn scale_factor<'local>(env: &mut JNIEnv<'local>, android_ctx: &Context<'local>) -> f64 {
+    let res = android_ctx.resources(env);
+    let metrics = res.display_metrics(env);
+    metrics.density(env) as f64
+}
+
 pub struct MasonryState {
     render_cx: RenderContext,
     render_root: RenderRoot,
@@ -70,10 +80,8 @@ pub struct MasonryState {
 }
 
 impl MasonryState {
-    pub fn new(root_widget: impl Widget, background_color: Color) -> Self {
+    pub fn new(root_widget: impl Widget, background_color: Color, scale_factor: f64) -> Self {
         let render_cx = RenderContext::new();
-        // TODO: We can't know this scale factor until later?
-        let scale_factor = 1.0;
 
         Self {
             render_cx,
@@ -219,6 +227,16 @@ impl<Driver: AppDriver> MasonryViewPeer<Driver> {
                 events.raise(env, &view.0);
             });
         }
+
+        let android_ctx = ctx.view.context(&mut ctx.env);
+        let scale_factor = scale_factor(&mut ctx.env, &android_ctx);
+        let scene = if scale_factor == 1.0 {
+            scene
+        } else {
+            let mut new_scene = Scene::new();
+            new_scene.append(&scene, Some(Affine::scale(scale_factor)));
+            new_scene
+        };
 
         // Get the RenderSurface (surface + config).
         let surface = self.state.render_surface.as_ref().unwrap();
@@ -394,6 +412,11 @@ impl<Driver: AppDriver> ViewPeer for MasonryViewPeer<Driver> {
         height: jint,
     ) {
         self.state.tap_counter = TapCounter::new(ctx.view.view_configuration(&mut ctx.env));
+        let android_ctx = ctx.view.context(&mut ctx.env);
+        let scale_factor = scale_factor(&mut ctx.env, &android_ctx);
+        self.state
+            .render_root
+            .handle_window_event(WindowEvent::Rescale(scale_factor));
         let size = PhysicalSize {
             width: width as u32,
             height: height as u32,
@@ -527,12 +550,15 @@ impl<Driver: AppDriver> AccessibilityNodeProvider for MasonryViewPeer<Driver> {
 
 // TODO: InputConnection
 
-pub fn new_view_peer(
+pub fn new_view_peer<'local>(
+    env: &mut JNIEnv<'local>,
+    android_ctx: &Context<'local>,
     root_widget: impl Widget,
     mut app_driver: impl AppDriver + 'static,
     background_color: Color,
 ) -> jlong {
-    let mut state = MasonryState::new(root_widget, background_color);
+    let scale_factor = scale_factor(env, android_ctx);
+    let mut state = MasonryState::new(root_widget, background_color, scale_factor);
     app_driver.on_start(&mut state);
     register_view_peer(MasonryViewPeer { state, app_driver })
 }

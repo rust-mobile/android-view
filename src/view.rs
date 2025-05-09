@@ -75,6 +75,15 @@ impl<'local> View<'local> {
         )
     }
 
+    pub fn context(&self, env: &mut JNIEnv<'local>) -> Context<'local> {
+        Context(
+            env.call_method(&self.0, "getContext", "()Landroid/content/Context;", &[])
+                .unwrap()
+                .l()
+                .unwrap(),
+        )
+    }
+
     pub fn view_configuration(&self, env: &mut JNIEnv<'local>) -> ViewConfiguration {
         ViewConfiguration::new(&self.0, env)
     }
