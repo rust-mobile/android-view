@@ -11,15 +11,16 @@ use android_view::{
     *,
 };
 use masonry::{
-    core::{Action, Widget, WidgetId},
-    peniko::Color,
+    core::{Action, DefaultProperties, Widget, WidgetId},
+    properties::Padding,
+    theme::default_property_set,
     widgets::{Button, Flex, Label, Portal, RootWidget, TextArea, Textbox},
 };
 use masonry_android::{AppDriver, DriverCtx};
-use std::ffi::c_void;
+use std::{ffi::c_void, sync::Arc};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
-const VERTICAL_WIDGET_SPACING: f64 = 20.0;
+const WIDGET_SPACING: f64 = 5.0;
 
 struct Driver {
     next_task: String,
@@ -61,8 +62,15 @@ fn make_widget_tree() -> impl Widget {
                     .with_flex_child(Textbox::new(""), 1.0)
                     .with_child(Button::new("Add task")),
             )
-            .with_spacer(VERTICAL_WIDGET_SPACING),
+            .with_spacer(WIDGET_SPACING),
     )
+}
+
+fn default_props() -> Arc<DefaultProperties> {
+    let mut default_properties = default_property_set();
+    default_properties.insert::<RootWidget, _>(Padding::all(WIDGET_SPACING));
+
+    Arc::new(default_properties)
 }
 
 extern "system" fn new_view_peer<'local>(
@@ -77,7 +85,7 @@ extern "system" fn new_view_peer<'local>(
         Driver {
             next_task: String::new(),
         },
-        Color::BLACK,
+        default_props(),
     )
 }
 

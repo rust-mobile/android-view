@@ -13,9 +13,14 @@ use android_view::{
 use masonry::{
     Handled,
     app::{RenderRoot, RenderRootOptions, RenderRootSignal, WindowSizePolicy},
-    core::{TextEvent, Widget, WindowEvent},
+    core::{DefaultProperties, TextEvent, Widget, WidgetPod, WindowEvent},
     dpi::PhysicalSize,
     peniko::Color,
+    util::Instant,
+};
+use std::sync::{
+    Arc,
+    mpsc::{self, Receiver},
 };
 use tracing::{debug, info, info_span};
 use vello::{
@@ -83,33 +88,45 @@ fn hide_soft_input<'local>(env: &mut JNIEnv<'local>, view: &View<'local>) {
 pub struct MasonryState {
     render_cx: RenderContext,
     render_root: RenderRoot,
+    signal_receiver: Receiver<RenderRootSignal>,
     tap_counter: TapCounter,
     renderer: Option<Renderer>,
     render_surface: Option<RenderSurface<'static>>,
+    // Is `Some` if the most recently displayed frame was an animation frame.
+    last_anim: Option<Instant>,
     accesskit_adapter: accesskit_android::Adapter,
-    background_color: Color,
 }
 
 impl MasonryState {
-    pub fn new(root_widget: impl Widget, background_color: Color, scale_factor: f64) -> Self {
+    pub fn new(
+        root_widget: impl Widget,
+        default_properties: Arc<DefaultProperties>,
+        scale_factor: f64,
+    ) -> Self {
         let render_cx = RenderContext::new();
+        let (signal_sender, signal_receiver) = mpsc::channel();
 
         Self {
             render_cx,
             render_root: RenderRoot::new(
-                root_widget,
+                WidgetPod::new(root_widget).erased(),
+                move |signal| {
+                    signal_sender.send(signal).unwrap();
+                },
                 RenderRootOptions {
+                    default_properties,
                     use_system_fonts: true,
                     size_policy: WindowSizePolicy::User,
                     scale_factor,
                     test_font: None,
                 },
             ),
+            signal_receiver,
             renderer: None,
             tap_counter: TapCounter::default(),
             render_surface: None,
+            last_anim: None,
             accesskit_adapter: Default::default(),
-            background_color,
         }
     }
 }
@@ -144,7 +161,7 @@ struct MasonryViewPeer<Driver: AppDriver> {
 impl<Driver: AppDriver> MasonryViewPeer<Driver> {
     fn handle_signals(&mut self, ctx: &mut CallbackCtx) {
         let mut needs_redraw = false;
-        while let Some(signal) = self.state.render_root.pop_signal() {
+        while let Ok(signal) = self.state.signal_receiver.try_recv() {
             match signal {
                 RenderRootSignal::Action(action, widget_id) => {
                     let mut driver_ctx = DriverCtx {
@@ -224,9 +241,22 @@ impl<Driver: AppDriver> MasonryViewPeer<Driver> {
 
     fn redraw(&mut self, ctx: &mut CallbackCtx) {
         let _span = info_span!("redraw");
+
+        let now = Instant::now();
+        // TODO: this calculation uses wall-clock time of the paint call, which
+        // potentially has jitter.
+        //
+        // See https://github.com/linebender/druid/issues/85 for discussion.
+        let last = self.state.last_anim.take();
+        let elapsed = last.map(|t| now.duration_since(t)).unwrap_or_default();
         self.state
             .render_root
-            .handle_window_event(WindowEvent::AnimFrame);
+            .handle_window_event(WindowEvent::AnimFrame(elapsed));
+        // If this animation will continue, store the time.
+        // If a new animation starts, then it will have zero reported elapsed time.
+        let animation_continues = self.state.render_root.needs_anim();
+        self.state.last_anim = animation_continues.then_some(now);
+
         let (scene, tree_update) = self.state.render_root.redraw();
 
         if let Some(events) = self
@@ -270,7 +300,7 @@ impl<Driver: AppDriver> MasonryViewPeer<Driver> {
                 &scene,
                 &surface.target_view,
                 &vello::RenderParams {
-                    base_color: self.state.background_color,
+                    base_color: Color::BLACK,
                     width,
                     height,
                     antialiasing_method: vello::AaConfig::Area,
@@ -566,10 +596,10 @@ pub fn new_view_peer<'local>(
     android_ctx: &Context<'local>,
     root_widget: impl Widget,
     mut app_driver: impl AppDriver + 'static,
-    background_color: Color,
+    default_properties: Arc<DefaultProperties>,
 ) -> jlong {
     let scale_factor = scale_factor(env, android_ctx);
-    let mut state = MasonryState::new(root_widget, background_color, scale_factor);
+    let mut state = MasonryState::new(root_widget, default_properties, scale_factor);
     app_driver.on_start(&mut state);
     register_view_peer(MasonryViewPeer { state, app_driver })
 }
