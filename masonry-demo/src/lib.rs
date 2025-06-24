@@ -14,7 +14,7 @@ use masonry::{
     core::{Action, DefaultProperties, Widget, WidgetId},
     properties::Padding,
     theme::default_property_set,
-    widgets::{Button, Flex, Label, Portal, RootWidget, TextArea, Textbox},
+    widgets::{Button, Flex, Label, Portal, TextArea, Textbox},
 };
 use masonry_android::{AppDriver, DriverCtx};
 use std::{ffi::c_void, sync::Arc};
@@ -31,10 +31,7 @@ impl AppDriver for Driver {
         match action {
             Action::ButtonPressed(_) => {
                 ctx.render_root().edit_root_widget(|mut root| {
-                    let mut root = root.downcast::<RootWidget>();
-
-                    let mut portal = RootWidget::child_mut(&mut root);
-                    let mut portal = portal.downcast::<Portal<Flex>>();
+                    let mut portal = root.downcast::<Portal<Flex>>();
                     let mut flex = Portal::child_mut(&mut portal);
                     Flex::add_child(&mut flex, Label::new(self.next_task.clone()));
 
@@ -68,7 +65,7 @@ fn make_widget_tree() -> impl Widget {
 
 fn default_props() -> Arc<DefaultProperties> {
     let mut default_properties = default_property_set();
-    default_properties.insert::<RootWidget, _>(Padding::all(WIDGET_SPACING));
+    default_properties.insert::<Portal<Flex>, _>(Padding::all(WIDGET_SPACING));
 
     Arc::new(default_properties)
 }
@@ -81,7 +78,7 @@ extern "system" fn new_view_peer<'local>(
     masonry_android::new_view_peer(
         &mut env,
         &context,
-        RootWidget::new(make_widget_tree()),
+        make_widget_tree(),
         Driver {
             next_task: String::new(),
         },

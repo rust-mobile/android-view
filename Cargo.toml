@@ -18,7 +18,7 @@ ndk = "0.9.0"
 num_enum = "0.7.3"
 send_wrapper = "0.6.0"
 smallvec = "1.15.0"
-ui-events = "0.1.0"
+ui-events = { git = "https://github.com/endoli/ui-events", rev = "6382e63" }
 
 [profile.dev]
 panic = "abort"

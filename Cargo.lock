@@ -766,7 +766,7 @@ dependencies = [
 [[package]]
 name = "masonry"
 version = "0.3.0"
-source = "git+https://github.com/linebender/xilem#47722f4357fe7b7a595bb1f7815229bb1e9e38d9"
+source = "git+https://github.com/xorgy/xilem?branch=ui-events-0.2.0#39583abb0277fa6fcf2bb75a8d212bf37ed6ab5c"
 dependencies = [
  "accesskit",
  "cursor-icon",
@@ -796,7 +796,7 @@ dependencies = [
 [[package]]
 name = "masonry_core"
 version = "0.3.0"
-source = "git+https://github.com/linebender/xilem#47722f4357fe7b7a595bb1f7815229bb1e9e38d9"
+source = "git+https://github.com/xorgy/xilem?branch=ui-events-0.2.0#39583abb0277fa6fcf2bb75a8d212bf37ed6ab5c"
 dependencies = [
  "accesskit",
  "anymap3",
@@ -1623,7 +1623,7 @@ dependencies = [
 [[package]]
 name = "tree_arena"
 version = "0.1.0"
-source = "git+https://github.com/linebender/xilem#47722f4357fe7b7a595bb1f7815229bb1e9e38d9"
+source = "git+https://github.com/xorgy/xilem?branch=ui-events-0.2.0#39583abb0277fa6fcf2bb75a8d212bf37ed6ab5c"
 dependencies = [
  "hashbrown",
 ]
@@ -1631,8 +1631,7 @@ dependencies = [
 [[package]]
 name = "ui-events"
 version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c4c2cc34489c685d4e7a1a1f97b7b4416c5aa789892114ae77df6cd2a60f0ec4"
+source = "git+https://github.com/endoli/ui-events?rev=6382e63#6382e6394a008bc21ef1802e1825b507b4b822f1"
 dependencies = [
  "dpi",
  "keyboard-types",

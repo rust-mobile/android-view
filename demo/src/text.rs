@@ -12,7 +12,7 @@ use parley::{
 use std::time::{Duration, Instant};
 use ui_events::{
     keyboard::{Code, Key, KeyState, KeyboardEvent, NamedKey},
-    pointer::{PointerButton, PointerEvent, PointerState, PointerUpdate},
+    pointer::{PointerButton, PointerButtonEvent, PointerEvent, PointerState, PointerUpdate},
 };
 use vello::{
     Scene,
@@ -310,7 +310,7 @@ impl Editor {
     pub fn handle_pointer_event(&mut self, ev: PointerEvent) -> bool {
         let mut drv = self.editor.driver(&mut self.font_cx, &mut self.layout_cx);
         match ev {
-            PointerEvent::Down {
+            PointerEvent::Down(PointerButtonEvent {
                 button: None | Some(PointerButton::Primary),
                 state:
                     PointerState {
@@ -320,7 +320,7 @@ impl Editor {
                         ..
                     },
                 ..
-            } => match count {
+            }) => match count {
                 2 => drv.select_word_at_point(position.x as f32 - INSET, position.y as f32 - INSET),
                 3 => drv.select_line_at_point(position.x as f32 - INSET, position.y as f32 - INSET),
                 1 if modifiers.shift() => drv.extend_selection_to_point(

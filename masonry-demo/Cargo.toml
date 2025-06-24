@@ -9,7 +9,7 @@ crate-type = ["cdylib"]
 
 [dependencies]
 android-view = { path = ".." }
-masonry = { git = "https://github.com/linebender/xilem" }
+masonry = { git = "https://github.com/xorgy/xilem", branch = "ui-events-0.2.0" }
 masonry_android = { path = "../masonry" }
 
 # Send tracing events to Android GPU inspector, for profiling
