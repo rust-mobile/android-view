@@ -17,7 +17,7 @@ log = "0.4.26"
 parley = { version = "0.5.0", features = ["accesskit"] }
 peniko = { version = "0.4.0", default-features = false }
 pollster = "0.4.0"
-ui-events = "0.1.0"
+ui-events = { git = "https://github.com/endoli/ui-events", rev = "6382e63" }
 vello = "0.5.0"
 
 # Send tracing events to Android GPU inspector, for profiling

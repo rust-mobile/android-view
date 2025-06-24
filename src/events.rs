@@ -12,7 +12,10 @@ use num_enum::FromPrimitive;
 use ui_events::{
     ScrollDelta,
     keyboard::{KeyboardEvent, Modifiers},
-    pointer::{ContactGeometry, PointerEvent, PointerId, PointerState, PointerUpdate},
+    pointer::{
+        ContactGeometry, PointerButtonEvent, PointerEvent, PointerId, PointerScrollEvent,
+        PointerState, PointerUpdate,
+    },
 };
 
 use crate::ViewConfiguration;
@@ -467,16 +470,18 @@ impl<'local> MotionEvent<'local> {
         };
 
         Some(match action {
-            MotionAction::Down | MotionAction::PointerDown => PointerEvent::Down {
+            MotionAction::Down | MotionAction::PointerDown => {
+                PointerEvent::Down(PointerButtonEvent {
+                    pointer,
+                    state,
+                    button,
+                })
+            }
+            MotionAction::Up | MotionAction::PointerUp => PointerEvent::Up(PointerButtonEvent {
                 pointer,
                 state,
                 button,
-            },
-            MotionAction::Up | MotionAction::PointerUp => PointerEvent::Up {
-                pointer,
-                state,
-                button,
-            },
+            }),
             MotionAction::Move | MotionAction::HoverMove => {
                 let hsz = self.history_size(env);
                 let mut coalesced: Vec<PointerState> = vec![state.clone(); hsz as usize];
@@ -527,7 +532,7 @@ impl<'local> MotionEvent<'local> {
             MotionAction::Cancel => PointerEvent::Cancel(pointer),
             MotionAction::HoverEnter => PointerEvent::Enter(pointer),
             MotionAction::HoverExit => PointerEvent::Leave(pointer),
-            MotionAction::Scroll => PointerEvent::Scroll {
+            MotionAction::Scroll => PointerEvent::Scroll(PointerScrollEvent {
                 pointer,
                 delta: ScrollDelta::PixelDelta(PhysicalPosition::<f64> {
                     x: (self.axis(env, Axis::Hscroll, action_index)
@@ -536,7 +541,7 @@ impl<'local> MotionEvent<'local> {
                         * vc.scaled_vertical_scroll_factor) as f64,
                 }),
                 state,
-            },
+            }),
             _ => {
                 // Other current `MotionAction` values relate to gamepad/joystick buttons;
                 // ui-events doesn't currently have types for these, so consider them unhandled.
@@ -620,11 +625,11 @@ impl TapCounter {
     ///
     pub fn attach_count(&mut self, e: PointerEvent) -> PointerEvent {
         match e {
-            PointerEvent::Down {
+            PointerEvent::Down(PointerButtonEvent {
                 button,
                 pointer,
                 state,
-            } => {
+            }) => {
                 let e = if let Some(i) =
                     self.taps.iter().position(|TapState { x, y, up_time, .. }| {
                         let dx = (x - state.position.x).abs();
@@ -641,11 +646,11 @@ impl TapCounter {
                     self.taps[i].x = state.position.x;
                     self.taps[i].y = state.position.y;
 
-                    PointerEvent::Down {
+                    PointerEvent::Down(PointerButtonEvent {
                         button,
                         pointer,
                         state: PointerState { count, ..state },
-                    }
+                    })
                 } else {
                     let s = TapState {
                         pointer_id: pointer.pointer_id,
@@ -656,34 +661,34 @@ impl TapCounter {
                         y: state.position.y,
                     };
                     self.taps.push(s);
-                    PointerEvent::Down {
+                    PointerEvent::Down(PointerButtonEvent {
                         button,
                         pointer,
                         state: PointerState { count: 1, ..state },
-                    }
+                    })
                 };
                 self.clear_expired(state.time);
                 e
             }
-            PointerEvent::Up {
+            PointerEvent::Up(PointerButtonEvent {
                 button,
                 pointer,
                 ref state,
-            } => {
+            }) => {
                 if let Some(i) = self
                     .taps
                     .iter()
                     .position(|TapState { pointer_id, .. }| *pointer_id == pointer.pointer_id)
                 {
                     self.taps[i].up_time = state.time;
-                    PointerEvent::Up {
+                    PointerEvent::Up(PointerButtonEvent {
                         button,
                         pointer,
                         state: PointerState {
                             count: self.taps[i].count,
                             ..state.clone()
                         },
-                    }
+                    })
                 } else {
                     e.clone()
                 }
@@ -735,7 +740,7 @@ impl TapCounter {
                     .retain(|TapState { pointer_id, .. }| *pointer_id != p.pointer_id);
                 e.clone()
             }
-            PointerEvent::Enter(..) | PointerEvent::Scroll { .. } => e.clone(),
+            PointerEvent::Enter(..) | PointerEvent::Scroll(..) => e.clone(),
         }
     }
 

@@ -371,7 +371,7 @@ impl ViewPeer for DemoViewPeer {
             return false;
         };
 
-        if matches!(ev, PointerEvent::Up { .. }) {
+        if matches!(ev, PointerEvent::Up(..)) {
             ctx.push_static_deferred_callback(show_soft_input);
         }
 
