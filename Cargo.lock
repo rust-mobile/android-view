@@ -769,7 +769,7 @@ dependencies = [
 [[package]]
 name = "masonry"
 version = "0.3.0"
-source = "git+https://github.com/linebender/xilem#ddc5e9818352143d7a73ed4ecd6efab7788df6a5"
+source = "git+https://github.com/linebender/xilem?branch=virtual-scroll-a11y#0ebf69b1d34c9697e6356f492dfbfb57f62e1a8f"
 dependencies = [
  "accesskit",
  "cursor-icon",
@@ -798,7 +798,7 @@ dependencies = [
 [[package]]
 name = "masonry_core"
 version = "0.3.0"
-source = "git+https://github.com/linebender/xilem#ddc5e9818352143d7a73ed4ecd6efab7788df6a5"
+source = "git+https://github.com/linebender/xilem?branch=virtual-scroll-a11y#0ebf69b1d34c9697e6356f492dfbfb57f62e1a8f"
 dependencies = [
  "accesskit",
  "anymap3",
@@ -1625,7 +1625,7 @@ dependencies = [
 [[package]]
 name = "tree_arena"
 version = "0.1.0"
-source = "git+https://github.com/linebender/xilem#ddc5e9818352143d7a73ed4ecd6efab7788df6a5"
+source = "git+https://github.com/linebender/xilem?branch=virtual-scroll-a11y#0ebf69b1d34c9697e6356f492dfbfb57f62e1a8f"
 dependencies = [
  "hashbrown",
 ]
