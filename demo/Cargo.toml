@@ -8,13 +8,13 @@ name = "main"
 crate-type = ["cdylib"]
 
 [dependencies]
-accesskit = "0.19.0"
-accesskit_android = "0.2.0"
+accesskit = "0.21.0"
+accesskit_android = "0.4.0"
 android-view = { path = ".." }
 android_logger = "0.15.0"
 anyhow = "1.0.96"
 log = "0.4.26"
-parley = { version = "0.5.0", features = ["accesskit"] }
+parley = { git = "https://github.com/linebender/parley", rev = "587b7634ae8601c10de7f0361bfd56085a5b7b4e", features = ["accesskit"] }
 peniko = { version = "0.4.0", default-features = false }
 pollster = "0.4.0"
 ui-events = "0.1.0"

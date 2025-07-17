@@ -4,15 +4,15 @@ version = 4
 
 [[package]]
 name = "accesskit"
-version = "0.19.0"
+version = "0.21.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e25ae84c0260bdf5df07796d7cc4882460de26a2b406ec0e6c42461a723b271b"
+checksum = "9c0690ad6e6f9597b8439bd3c95e8c6df5cd043afd950c6d68f3b37df641e27c"
 
 [[package]]
 name = "accesskit_android"
-version = "0.2.0"
+version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0a220a811989b46e6b1ade0b96ab5d10a19f2890503dd449343797d2686589a7"
+checksum = "6436bf994fb0a84427a4caf9fce8a9b0c586c9ac4877de4bd9bd2aefda0e9e65"
 dependencies = [
  "accesskit",
  "accesskit_consumer",
@@ -22,9 +22,9 @@ dependencies = [
 
 [[package]]
 name = "accesskit_consumer"
-version = "0.28.0"
+version = "0.30.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8bfae7c152994a31dc7d99b8eeac7784a919f71d1b306f4b83217e110fd3824c"
+checksum = "ec27574c1baeb7747c802a194566b46b602461e81dc4957949580ea8da695038"
 dependencies = [
  "accesskit",
  "hashbrown",
@@ -144,6 +144,11 @@ name = "anymap3"
 version = "1.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "170433209e817da6aae2c51aa0dd443009a613425dd041ebfb2492d1c4c11a25"
+
+[[package]]
+name = "anymore"
+version = "0.1.0"
+source = "git+https://github.com/linebender/anymore?rev=3537bdc3aa03c92e380f106d18b7957b934c9eb5#3537bdc3aa03c92e380f106d18b7957b934c9eb5"
 
 [[package]]
 name = "arrayvec"
@@ -341,6 +346,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "dlib"
+version = "0.5.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "330c60081dcc4c72131f8eb70510f1ac07223e5d4163db481a04a0befcffa412"
+dependencies = [
+ "libloading",
+]
+
+[[package]]
 name = "document-features"
 version = "0.2.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -415,23 +429,11 @@ dependencies = [
 ]
 
 [[package]]
-name = "fontconfig-cache-parser"
-version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a7f8afb20c8069fd676d27b214559a337cc619a605d25a87baa90b49a06f3b18"
-dependencies = [
- "bytemuck",
- "thiserror 1.0.69",
-]
-
-[[package]]
 name = "fontique"
 version = "0.5.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "39f97079e1293b8c1e9fb03a2875d328bd2ee8f3b95ce62959c0acc04049c708"
+source = "git+https://github.com/linebender/parley?rev=587b7634ae8601c10de7f0361bfd56085a5b7b4e#587b7634ae8601c10de7f0361bfd56085a5b7b4e"
 dependencies = [
  "bytemuck",
- "fontconfig-cache-parser",
  "hashbrown",
  "icu_locid",
  "memmap2",
@@ -445,6 +447,7 @@ dependencies = [
  "smallvec",
  "windows",
  "windows-core",
+ "yeslogic-fontconfig-sys",
 ]
 
 [[package]]
@@ -766,7 +769,7 @@ dependencies = [
 [[package]]
 name = "masonry"
 version = "0.3.0"
-source = "git+https://github.com/linebender/xilem#47722f4357fe7b7a595bb1f7815229bb1e9e38d9"
+source = "git+https://github.com/linebender/xilem#68dff90ead012c90237a39c9339ca52695e86d25"
 dependencies = [
  "accesskit",
  "cursor-icon",
@@ -777,7 +780,6 @@ dependencies = [
  "tracing",
  "ui-events",
  "vello",
- "web-time",
 ]
 
 [[package]]
@@ -796,10 +798,11 @@ dependencies = [
 [[package]]
 name = "masonry_core"
 version = "0.3.0"
-source = "git+https://github.com/linebender/xilem#47722f4357fe7b7a595bb1f7815229bb1e9e38d9"
+source = "git+https://github.com/linebender/xilem#68dff90ead012c90237a39c9339ca52695e86d25"
 dependencies = [
  "accesskit",
  "anymap3",
+ "anymore",
  "cursor-icon",
  "dpi",
  "parley",
@@ -1064,8 +1067,7 @@ dependencies = [
 [[package]]
 name = "parley"
 version = "0.5.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "13e57638545cf2ba4c3e72cc5715e53b1880b829cc3dbefda3d1700c58efe723"
+source = "git+https://github.com/linebender/parley?rev=587b7634ae8601c10de7f0361bfd56085a5b7b4e#587b7634ae8601c10de7f0361bfd56085a5b7b4e"
 dependencies = [
  "accesskit",
  "fontique",
@@ -1623,7 +1625,7 @@ dependencies = [
 [[package]]
 name = "tree_arena"
 version = "0.1.0"
-source = "git+https://github.com/linebender/xilem#47722f4357fe7b7a595bb1f7815229bb1e9e38d9"
+source = "git+https://github.com/linebender/xilem#68dff90ead012c90237a39c9339ca52695e86d25"
 dependencies = [
  "hashbrown",
 ]
@@ -2182,6 +2184,17 @@ name = "yazi"
 version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e01738255b5a16e78bbb83e7fbba0a1e7dd506905cfc53f4622d89015a03fbb5"
+
+[[package]]
+name = "yeslogic-fontconfig-sys"
+version = "6.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "503a066b4c037c440169d995b869046827dbc71263f6e8f3be6d77d4f3229dbd"
+dependencies = [
+ "dlib",
+ "once_cell",
+ "pkg-config",
+]
 
 [[package]]
 name = "zeno"

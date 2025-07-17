@@ -11,10 +11,10 @@ use android_view::{
     *,
 };
 use masonry::{
-    core::{Action, DefaultProperties, Widget, WidgetId},
+    core::{Action, Properties, Widget, WidgetId, WidgetPod},
     properties::Padding,
     theme::default_property_set,
-    widgets::{Button, Flex, Label, Portal, RootWidget, TextArea, Textbox},
+    widgets::{Button, Flex, Label, Portal, TextArea, TextInput},
 };
 use masonry_android::{AppDriver, DriverCtx};
 use std::{ffi::c_void, sync::Arc};
@@ -31,18 +31,15 @@ impl AppDriver for Driver {
         match action {
             Action::ButtonPressed(_) => {
                 ctx.render_root().edit_root_widget(|mut root| {
-                    let mut root = root.downcast::<RootWidget>();
-
-                    let mut portal = RootWidget::child_mut(&mut root);
-                    let mut portal = portal.downcast::<Portal<Flex>>();
+                    let mut portal = root.downcast::<Portal<Flex>>();
                     let mut flex = Portal::child_mut(&mut portal);
                     Flex::add_child(&mut flex, Label::new(self.next_task.clone()));
 
                     let mut first_row = Flex::child_mut(&mut flex, 0).unwrap();
                     let mut first_row = first_row.downcast::<Flex>();
-                    let mut textbox = Flex::child_mut(&mut first_row, 0).unwrap();
-                    let mut textbox = textbox.downcast::<Textbox>();
-                    let mut text_area = Textbox::text_mut(&mut textbox);
+                    let mut text_input = Flex::child_mut(&mut first_row, 0).unwrap();
+                    let mut text_input = text_input.downcast::<TextInput>();
+                    let mut text_area = TextInput::text_mut(&mut text_input);
                     TextArea::reset_text(&mut text_area, "");
                 });
             }
@@ -57,20 +54,17 @@ impl AppDriver for Driver {
 fn make_widget_tree() -> impl Widget {
     Portal::new(
         Flex::column()
-            .with_child(
-                Flex::row()
-                    .with_flex_child(Textbox::new(""), 1.0)
-                    .with_child(Button::new("Add task")),
+            .with_child_pod(
+                WidgetPod::new_with_props(
+                    Flex::row()
+                        .with_flex_child(TextInput::new(""), 1.0)
+                        .with_child(Button::new("Add task")),
+                    Properties::new().with(Padding::all(WIDGET_SPACING)),
+                )
+                .erased(),
             )
             .with_spacer(WIDGET_SPACING),
     )
-}
-
-fn default_props() -> Arc<DefaultProperties> {
-    let mut default_properties = default_property_set();
-    default_properties.insert::<RootWidget, _>(Padding::all(WIDGET_SPACING));
-
-    Arc::new(default_properties)
 }
 
 extern "system" fn new_view_peer<'local>(
@@ -81,11 +75,11 @@ extern "system" fn new_view_peer<'local>(
     masonry_android::new_view_peer(
         &mut env,
         &context,
-        RootWidget::new(make_widget_tree()),
+        make_widget_tree(),
         Driver {
             next_task: String::new(),
         },
-        default_props(),
+        Arc::new(default_property_set()),
     )
 }
 
