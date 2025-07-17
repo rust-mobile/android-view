@@ -99,7 +99,7 @@ pub struct MasonryState {
 
 impl MasonryState {
     pub fn new(
-        root_widget: impl Widget,
+        root_widget: WidgetPod<dyn Widget>,
         default_properties: Arc<DefaultProperties>,
         scale_factor: f64,
     ) -> Self {
@@ -109,7 +109,7 @@ impl MasonryState {
         Self {
             render_cx,
             render_root: RenderRoot::new(
-                WidgetPod::new(root_widget).erased(),
+                root_widget,
                 move |signal| {
                     signal_sender.send(signal).unwrap();
                 },
@@ -594,7 +594,7 @@ impl<Driver: AppDriver> AccessibilityNodeProvider for MasonryViewPeer<Driver> {
 pub fn new_view_peer<'local>(
     env: &mut JNIEnv<'local>,
     android_ctx: &Context<'local>,
-    root_widget: impl Widget,
+    root_widget: WidgetPod<dyn Widget>,
     mut app_driver: impl AppDriver + 'static,
     default_properties: Arc<DefaultProperties>,
 ) -> jlong {

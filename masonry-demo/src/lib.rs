@@ -75,7 +75,7 @@ extern "system" fn new_view_peer<'local>(
     masonry_android::new_view_peer(
         &mut env,
         &context,
-        make_widget_tree(),
+        WidgetPod::new(make_widget_tree()).erased(),
         Driver {
             next_task: String::new(),
         },
