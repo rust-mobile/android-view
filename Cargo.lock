@@ -785,13 +785,11 @@ dependencies = [
 name = "masonry_android"
 version = "0.1.0"
 dependencies = [
- "accesskit",
  "accesskit_android",
  "android-view",
- "masonry",
+ "masonry_core",
  "pollster",
  "tracing",
- "vello",
 ]
 
 [[package]]

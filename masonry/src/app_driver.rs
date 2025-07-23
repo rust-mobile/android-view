@@ -1,7 +1,7 @@
 // Copyright 2025 the Xilem Authors
 // SPDX-License-Identifier: Apache-2.0
 
-use masonry::{
+use masonry_core::{
     app::RenderRoot,
     core::{ErasedAction, WidgetId},
 };

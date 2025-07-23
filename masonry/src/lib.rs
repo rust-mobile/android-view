@@ -1,7 +1,6 @@
 // Copyright 2024 the Xilem Authors
 // SPDX-License-Identifier: Apache-2.0
 
-use accesskit::{ActionHandler, ActionRequest, ActivationHandler, TreeUpdate};
 use android_view::{
     jni::{
         JNIEnv,
@@ -10,27 +9,28 @@ use android_view::{
     ndk::{event::Keycode, native_window::NativeWindow},
     *,
 };
-use masonry::{
+use masonry_core::{
+    accesskit::{ActionHandler, ActionRequest, ActivationHandler, TreeUpdate},
     app::{RenderRoot, RenderRootOptions, RenderRootSignal, WindowSizePolicy},
     core::{DefaultProperties, Handled, NewWidget, TextEvent, Widget, WindowEvent},
     dpi::PhysicalSize,
     peniko::Color,
     util::Instant,
+    vello::{
+        self, Renderer, RendererOptions, Scene,
+        kurbo::Affine,
+        util::{RenderContext, RenderSurface},
+        wgpu::{
+            self, PresentMode,
+            rwh::{DisplayHandle, HandleError, HasDisplayHandle, HasWindowHandle, WindowHandle},
+        },
+    },
 };
 use std::sync::{
     Arc,
     mpsc::{self, Receiver},
 };
 use tracing::{debug, info, info_span};
-use vello::{
-    Renderer, RendererOptions, Scene,
-    kurbo::Affine,
-    util::{RenderContext, RenderSurface},
-    wgpu::{
-        self, PresentMode,
-        rwh::{DisplayHandle, HandleError, HasDisplayHandle, HasWindowHandle, WindowHandle},
-    },
-};
 
 mod app_driver;
 pub use app_driver::*;
