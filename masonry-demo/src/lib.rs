@@ -1,6 +1,11 @@
 // Copyright 2024 the Xilem Authors
 // SPDX-License-Identifier: Apache-2.0
 
+//! A demonstration of the [`VirtualScroll`] widget, producing an infinite[^1] FizzBuzz.
+//!
+//! [^1]: Limited to `i64::MIN..i64::MAX-1`; that is, there are `2^64-1` possible items.
+//! However, there is (currently...) no way to jump to a specific item, so it's impossible to reach the end.
+
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use android_view::{
@@ -11,60 +16,76 @@ use android_view::{
     *,
 };
 use masonry::{
-    core::{ErasedAction, NewWidget, Properties, Widget, WidgetId},
-    properties::Padding,
+    core::{ArcStr, ErasedAction, NewWidget, StyleProperty, WidgetId},
     theme::default_property_set,
-    widgets::{Button, ButtonPress, Flex, Label, Portal, TextAction, TextArea, TextInput},
+    widgets::{Label, VirtualScroll, VirtualScrollAction},
 };
 use masonry_android::{AppDriver, DriverCtx};
 use std::{ffi::c_void, sync::Arc};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
-const WIDGET_SPACING: f64 = 5.0;
+/// The widget kind contained in the scroll area. This is a type parameter (`W`) of [`VirtualScroll`],
+/// although note that [`dyn Widget`](masonry::core::Widget) can also be used for dynamic children kinds.
+///
+/// We use a type alias for this, as when we downcast to the `VirtualScroll`, we need to be sure to
+/// always use the same type for `W`.
+type ScrollContents = Label;
+
+/// Function to create the virtual scroll area.
+fn init() -> VirtualScroll<ScrollContents> {
+    // We start our fizzbuzzing with the top of the screen at item 0
+    VirtualScroll::new(0)
+}
 
 struct Driver {
-    next_task: String,
+    scroll_id: WidgetId,
+    fizz: ArcStr,
+    buzz: ArcStr,
+    fizzbuzz: ArcStr,
 }
 
 impl AppDriver for Driver {
-    fn on_action(&mut self, ctx: &mut DriverCtx<'_>, _widget_id: WidgetId, action: ErasedAction) {
-        if action.is::<ButtonPress>() {
+    fn on_action(&mut self, ctx: &mut DriverCtx<'_>, widget_id: WidgetId, action: ErasedAction) {
+        if widget_id == self.scroll_id {
+            // The VirtualScroll widget will send us a VirtualScrollAction every time it wants different
+            // items to be loaded or unloaded.
+            let action = action
+                .downcast::<VirtualScrollAction>()
+                .expect("Only expected Virtual Scroll actions");
             ctx.render_root().edit_root_widget(|mut root| {
-                let mut portal = root.downcast::<Portal<Flex>>();
-                let mut flex = Portal::child_mut(&mut portal);
-                Flex::add_child(&mut flex, Label::new(self.next_task.clone()).with_auto_id());
-
-                let mut first_row = Flex::child_mut(&mut flex, 0).unwrap();
-                let mut first_row = first_row.downcast::<Flex>();
-                let mut text_input = Flex::child_mut(&mut first_row, 0).unwrap();
-                let mut text_input = text_input.downcast::<TextInput>();
-                let mut text_area = TextInput::text_mut(&mut text_input);
-                TextArea::reset_text(&mut text_area, "");
-            });
-        } else if action.is::<TextAction>() {
-            let action = action.downcast::<TextAction>().unwrap();
-            match *action {
-                TextAction::Changed(new_text) => {
-                    self.next_task = new_text.clone();
+                let mut scroll = root.downcast::<VirtualScroll<ScrollContents>>();
+                // We need to tell the `VirtualScroll` which request this is associated with
+                // This is so that the controller knows which actions have been handled.
+                VirtualScroll::will_handle_action(&mut scroll, &action);
+                for idx in action.old_active.clone() {
+                    if !action.target.contains(&idx) {
+                        // If we had different work to do in response to the item being unloaded
+                        // (for example, saving some related data?), then we'd do it here
+                        VirtualScroll::remove_child(&mut scroll, idx);
+                    }
                 }
-                TextAction::Entered(_) => {}
-            }
+                for idx in action.target.clone() {
+                    if !action.old_active.contains(&idx) {
+                        let label: ArcStr = match (idx % 3 == 0, idx % 5 == 0) {
+                            (false, true) => self.buzz.clone(),
+                            (true, false) => self.fizz.clone(),
+                            (true, true) => self.fizzbuzz.clone(),
+                            (false, false) => format!("{idx}").into(),
+                        };
+                        VirtualScroll::add_child(
+                            &mut scroll,
+                            idx,
+                            NewWidget::new(Label::new(label).with_style(StyleProperty::FontSize(
+                                if idx % 100 == 0 { 40. } else { 20. },
+                            ))),
+                        );
+                    }
+                }
+            });
+        } else {
+            tracing::warn!("Got unexpected action {action:?}");
         }
     }
-}
-
-fn make_widget_tree() -> impl Widget {
-    Portal::new(
-        Flex::column()
-            .with_child(NewWidget::new_with_props(
-                Flex::row()
-                    .with_flex_child(TextInput::new("").with_auto_id(), 1.0)
-                    .with_child(Button::new("Add task").with_auto_id()),
-                Properties::new().with(Padding::all(WIDGET_SPACING)),
-            ))
-            .with_spacer(WIDGET_SPACING)
-            .with_auto_id(),
-    )
 }
 
 extern "system" fn new_view_peer<'local>(
@@ -72,13 +93,19 @@ extern "system" fn new_view_peer<'local>(
     _view: View<'local>,
     context: Context<'local>,
 ) -> jlong {
+    let scroll_id = WidgetId::next();
+    let main_widget = NewWidget::new_with_id(init(), scroll_id).erased();
+    let driver = Driver {
+        scroll_id,
+        fizz: "Fizz".into(),
+        buzz: "Buzz".into(),
+        fizzbuzz: "FizzBuzz".into(),
+    };
     masonry_android::new_view_peer(
         &mut env,
         &context,
-        NewWidget::new(make_widget_tree()).erased(),
-        Driver {
-            next_task: String::new(),
-        },
+        main_widget,
+        driver,
         Arc::new(default_property_set()),
     )
 }
