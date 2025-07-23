@@ -241,26 +241,6 @@ impl<Driver: AppDriver> MasonryViewPeer<Driver> {
     fn redraw(&mut self, ctx: &mut CallbackCtx) {
         let _span = info_span!("redraw");
 
-        let now = Instant::now();
-        // TODO: this calculation uses wall-clock time of the paint call, which
-        // potentially has jitter.
-        //
-        // See https://github.com/linebender/druid/issues/85 for discussion.
-        let last = self.state.last_anim.take();
-        let elapsed = last.map(|t| now.duration_since(t)).unwrap_or_default();
-        self.state
-            .render_root
-            .handle_window_event(WindowEvent::AnimFrame(elapsed));
-
-        // Make sure we handle any signals emitted in response to the
-        // `AnimFrame` event before we redraw.
-        self.handle_signals(ctx);
-
-        // If this animation will continue, store the time.
-        // If a new animation starts, then it will have zero reported elapsed time.
-        let animation_continues = self.state.render_root.needs_anim();
-        self.state.last_anim = animation_continues.then_some(now);
-
         let (scene, tree_update) = self.state.render_root.redraw();
 
         if let Some(events) = self
@@ -469,6 +449,7 @@ impl<Driver: AppDriver> ViewPeer for MasonryViewPeer<Driver> {
         self.state
             .render_root
             .handle_window_event(WindowEvent::Resize(size));
+        self.handle_signals(ctx);
 
         let window = holder.surface(&mut ctx.env).to_native_window(&mut ctx.env);
         // Drop the old surface, if any, that owned the native window
@@ -518,6 +499,28 @@ impl<Driver: AppDriver> ViewPeer for MasonryViewPeer<Driver> {
     }
 
     fn do_frame(&mut self, ctx: &mut CallbackCtx, _frame_time_nanos: jlong) {
+        let _span = info_span!("do_frame");
+
+        let now = Instant::now();
+        // TODO: this calculation uses wall-clock time of the paint call, which
+        // potentially has jitter.
+        //
+        // See https://github.com/linebender/druid/issues/85 for discussion.
+        let last = self.state.last_anim.take();
+        let elapsed = last.map(|t| now.duration_since(t)).unwrap_or_default();
+        self.state
+            .render_root
+            .handle_window_event(WindowEvent::AnimFrame(elapsed));
+
+        // Make sure we handle any signals emitted in response to the
+        // `AnimFrame` event before we redraw.
+        self.handle_signals(ctx);
+
+        // If this animation will continue, store the time.
+        // If a new animation starts, then it will have zero reported elapsed time.
+        let animation_continues = self.state.render_root.needs_anim();
+        self.state.last_anim = animation_continues.then_some(now);
+
         self.redraw(ctx);
     }
 
