@@ -251,6 +251,11 @@ impl<Driver: AppDriver> MasonryViewPeer<Driver> {
         self.state
             .render_root
             .handle_window_event(WindowEvent::AnimFrame(elapsed));
+
+        // Make sure we handle any signals emitted in response to the
+        // `AnimFrame` event before we redraw.
+        self.handle_signals(ctx);
+
         // If this animation will continue, store the time.
         // If a new animation starts, then it will have zero reported elapsed time.
         let animation_continues = self.state.render_root.needs_anim();
