@@ -11,9 +11,8 @@ use android_view::{
     *,
 };
 use masonry::{
-    Handled,
     app::{RenderRoot, RenderRootOptions, RenderRootSignal, WindowSizePolicy},
-    core::{DefaultProperties, TextEvent, Widget, WidgetPod, WindowEvent},
+    core::{DefaultProperties, Handled, NewWidget, TextEvent, Widget, WindowEvent},
     dpi::PhysicalSize,
     peniko::Color,
     util::Instant,
@@ -99,7 +98,7 @@ pub struct MasonryState {
 
 impl MasonryState {
     pub fn new(
-        root_widget: WidgetPod<dyn Widget>,
+        root_widget: NewWidget<dyn Widget>,
         default_properties: Arc<DefaultProperties>,
         scale_factor: f64,
     ) -> Self {
@@ -594,7 +593,7 @@ impl<Driver: AppDriver> AccessibilityNodeProvider for MasonryViewPeer<Driver> {
 pub fn new_view_peer<'local>(
     env: &mut JNIEnv<'local>,
     android_ctx: &Context<'local>,
-    root_widget: WidgetPod<dyn Widget>,
+    root_widget: NewWidget<dyn Widget>,
     mut app_driver: impl AppDriver + 'static,
     default_properties: Arc<DefaultProperties>,
 ) -> jlong {

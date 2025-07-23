@@ -11,10 +11,10 @@ use android_view::{
     *,
 };
 use masonry::{
-    core::{Action, Properties, Widget, WidgetId, WidgetPod},
+    core::{ErasedAction, NewWidget, Properties, Widget, WidgetId},
     properties::Padding,
     theme::default_property_set,
-    widgets::{Button, Flex, Label, Portal, TextArea, TextInput},
+    widgets::{Button, ButtonPress, Flex, Label, Portal, TextAction, TextArea, TextInput},
 };
 use masonry_android::{AppDriver, DriverCtx};
 use std::{ffi::c_void, sync::Arc};
@@ -27,26 +27,28 @@ struct Driver {
 }
 
 impl AppDriver for Driver {
-    fn on_action(&mut self, ctx: &mut DriverCtx<'_>, _widget_id: WidgetId, action: Action) {
-        match action {
-            Action::ButtonPressed(_) => {
-                ctx.render_root().edit_root_widget(|mut root| {
-                    let mut portal = root.downcast::<Portal<Flex>>();
-                    let mut flex = Portal::child_mut(&mut portal);
-                    Flex::add_child(&mut flex, Label::new(self.next_task.clone()));
+    fn on_action(&mut self, ctx: &mut DriverCtx<'_>, _widget_id: WidgetId, action: ErasedAction) {
+        if action.is::<ButtonPress>() {
+            ctx.render_root().edit_root_widget(|mut root| {
+                let mut portal = root.downcast::<Portal<Flex>>();
+                let mut flex = Portal::child_mut(&mut portal);
+                Flex::add_child(&mut flex, Label::new(self.next_task.clone()).with_auto_id());
 
-                    let mut first_row = Flex::child_mut(&mut flex, 0).unwrap();
-                    let mut first_row = first_row.downcast::<Flex>();
-                    let mut text_input = Flex::child_mut(&mut first_row, 0).unwrap();
-                    let mut text_input = text_input.downcast::<TextInput>();
-                    let mut text_area = TextInput::text_mut(&mut text_input);
-                    TextArea::reset_text(&mut text_area, "");
-                });
+                let mut first_row = Flex::child_mut(&mut flex, 0).unwrap();
+                let mut first_row = first_row.downcast::<Flex>();
+                let mut text_input = Flex::child_mut(&mut first_row, 0).unwrap();
+                let mut text_input = text_input.downcast::<TextInput>();
+                let mut text_area = TextInput::text_mut(&mut text_input);
+                TextArea::reset_text(&mut text_area, "");
+            });
+        } else if action.is::<TextAction>() {
+            let action = action.downcast::<TextAction>().unwrap();
+            match *action {
+                TextAction::Changed(new_text) => {
+                    self.next_task = new_text.clone();
+                }
+                TextAction::Entered(_) => {}
             }
-            Action::TextChanged(new_text) => {
-                self.next_task = new_text.clone();
-            }
-            _ => {}
         }
     }
 }
@@ -54,16 +56,14 @@ impl AppDriver for Driver {
 fn make_widget_tree() -> impl Widget {
     Portal::new(
         Flex::column()
-            .with_child_pod(
-                WidgetPod::new_with_props(
-                    Flex::row()
-                        .with_flex_child(TextInput::new(""), 1.0)
-                        .with_child(Button::new("Add task")),
-                    Properties::new().with(Padding::all(WIDGET_SPACING)),
-                )
-                .erased(),
-            )
-            .with_spacer(WIDGET_SPACING),
+            .with_child(NewWidget::new_with_props(
+                Flex::row()
+                    .with_flex_child(TextInput::new("").with_auto_id(), 1.0)
+                    .with_child(Button::new("Add task").with_auto_id()),
+                Properties::new().with(Padding::all(WIDGET_SPACING)),
+            ))
+            .with_spacer(WIDGET_SPACING)
+            .with_auto_id(),
     )
 }
 
@@ -75,7 +75,7 @@ extern "system" fn new_view_peer<'local>(
     masonry_android::new_view_peer(
         &mut env,
         &context,
-        WidgetPod::new(make_widget_tree()).erased(),
+        NewWidget::new(make_widget_tree()).erased(),
         Driver {
             next_task: String::new(),
         },

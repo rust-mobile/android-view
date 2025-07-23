@@ -3,7 +3,7 @@
 
 use masonry::{
     app::RenderRoot,
-    core::{Action, WidgetId},
+    core::{ErasedAction, WidgetId},
 };
 
 use crate::MasonryState;
@@ -27,7 +27,7 @@ pub struct DriverCtx<'a> {
 /// a type that implements this trait.
 pub trait AppDriver {
     /// A hook which will be executed when a widget emits an [`Action`].
-    fn on_action(&mut self, ctx: &mut DriverCtx<'_>, widget_id: WidgetId, action: Action);
+    fn on_action(&mut self, ctx: &mut DriverCtx<'_>, widget_id: WidgetId, action: ErasedAction);
 
     #[expect(unused_variables, reason = "Default impl doesn't use arguments")]
     /// A hook which will be executed when the application starts, to allow initial configuration of the `MasonryState`.
